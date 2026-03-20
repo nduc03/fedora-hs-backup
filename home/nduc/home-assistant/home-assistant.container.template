@@ -1,0 +1,17 @@
+[Unit]
+Description=Home assistant
+
+[Container]
+Image=ghcr.io/home-assistant/home-assistant:stable
+ContainerName=home-assistant
+Network=host
+Volume=%service_dir%/config:/config:Z
+Volume=/run/dbus:/run/dbus:ro
+Volume=/etc/localtime:/etc/localtime:ro
+DNS=1.1.1.1
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

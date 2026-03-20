@@ -1,0 +1,18 @@
+[Unit]
+Description=PsiTransfer File Sharing
+
+[Container]
+Image=docker.io/psitrax/psitransfer:latest
+ContainerName=psitransfer-private
+PublishPort=8383:3000/tcp
+Environment=PSITRANSFER_DEFAULT_RETENTION=3600
+Environment=NODE_ENV=production
+Environment=PSITRANSFER_RETENTIONS='{"3600":"1 Hour"}'
+Environment=PSITRANSFER_ADMIN_PASS=031003
+Network=caddy.network
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

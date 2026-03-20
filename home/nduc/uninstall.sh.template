@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+
+SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
+
+SCRIPT_DIR_NAME="$(basename "$SCRIPT_DIR")"
+
+SERVICE_NAME=$(printf '%s\n' "$SCRIPT_DIR_NAME" | awk '{
+    g=$0;
+    # replace non-alnum/_/- with hyphen
+    g=gensub(/[^[:alnum:]_-]+/, "-", "g", g);
+    # remove leading hyphen
+    g=gensub(/^-+/, "", "g", g);
+    # remove trailing hyphen
+    g=gensub(/-+$/, "", "g", g);
+    print g
+}')
+
+ROOTLESS=false
+
+if [[ "$ROOTLESS" = "true" ]]; then
+  SYSTEMCTL_CMD="systemctl --user"
+  SUDO=""
+else
+  SYSTEMCTL_CMD="sudo systemctl"
+  SUDO="sudo"
+fi
+
+$SYSTEMCTL_CMD stop $SERVICE_NAME
+$SUDO podman quadlet rm -f $SERVICE_NAME.container $SERVICE_NAME.volume
+
+echo "Do you want to disable and remove the network created by this service?"
+echo "Note: This will may break other services if they are using this network."
+read -p "(y/n): " RESPONSE
+if [[ "$RESPONSE" =~ ^[Yy]$ ]]; then
+    echo "Removing network..."
+    $SUDO podman network rm -f $SERVICE_NAME.network
+    echo "Network removed."
+else
+    echo "Skipping network removal."
+fi
+
+read -p "Do you want to remove the forwarded port from firewall (sudo required)? (y/n): " RESPONSE
+if [[ "$RESPONSE" =~ ^[Yy]$ ]]; then
+    echo "Removing forwarded port from firewall..."
+    RULE="port=xx:proto=tcp:toport=xxxx"
+    if sudo firewall-cmd --permanent --list-forward-ports | grep -q "$RULE"; then
+        sudo firewall-cmd --permanent --remove-forward-port=$RULE
+        sudo firewall-cmd --reload
+        echo "Rule removed."
+    else
+        echo "Rule not found."
+    fi
+else
+    echo "Skipping firewall rule removal."
+fi
+
+read -p "Do you want to delete the service files and data? (y/n): " RESPONSE
+if [[ "$RESPONSE" =~ ^[Yy]$ ]]; then
+    echo "Deleting service files and data..."
+    rm -rf "$SCRIPT_DIR"
+    echo "Service files and data deleted."
+else
+    echo "Skipping deletion of service files and data."
+fi

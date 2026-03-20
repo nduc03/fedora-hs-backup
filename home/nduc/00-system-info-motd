@@ -1,0 +1,67 @@
+#!/bin/bash
+
+# Hàm lấy thông tin IPv4/IPv6 cho một giao diện
+get_ip_info() {
+    local interface=$1
+    local ipv4=$(ip -4 addr show dev "$interface" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+    local ipv6=$(ip -6 addr show dev "$interface" scope global 2>/dev/null | grep -oP '(?<=inet6\s)[0-9a-f:]+')
+
+    if [ -n "$ipv4" ]; then
+        printf " IPv4 address for %s: %s\n" "$interface" "$ipv4"
+    fi
+
+    if [ -n "$ipv6" ]; then
+        for addr in $ipv6; do
+            printf " IPv6 address for %s: %s\n" "$interface" "$addr"
+        done
+    fi
+}
+
+echo " System information as of $(date)"
+echo ""
+
+# 1. System Load
+LOAD_AVG=$(awk '{printf "%.1f", $1}' /proc/loadavg)
+echo " System load:             $LOAD_AVG"
+
+# 2. Disk Usage (chỉ lấy /)
+DISK_USAGE=$(df -h / | awk 'NR==2{print $5 " of " $2}')
+echo " Usage of /:              $DISK_USAGE"
+
+# 3. Memory Usage
+TOTAL_MEM=$(free -m | awk 'NR==2{print $2}')
+USED_MEM=$(free -m | awk 'NR==2{print $3}')
+MEM_PERCENT=$(( $USED_MEM * 100 / $TOTAL_MEM ))
+echo " Memory usage:            ${MEM_PERCENT}%"
+
+# 4. Swap Usage
+TOTAL_SWAP=$(free -m | awk 'NR==3{print $2}')
+USED_SWAP=$(free -m | awk 'NR==3{print $3}')
+SWAP_PERCENT=0
+if [ "$TOTAL_SWAP" -gt 0 ]; then
+    SWAP_PERCENT=$(( $USED_SWAP * 100 / $TOTAL_SWAP ))
+fi
+echo " Swap usage:              ${SWAP_PERCENT}%"
+
+# 5. Processes
+PROCESSES=$(ps -e | wc -l)
+echo " Processes:               $PROCESSES"
+
+# 6. Users logged in (trừ người dùng hiện tại)
+USERS=$(who | wc -l)
+echo " Users logged in:         $USERS"
+
+# 7. IP Addresses (tìm giao diện chính, thường là eth0 hoặc enp*)
+echo ""
+PRIMARY_INTERFACE=$(ip route | grep default | awk '{print $5}' | head -n 1)
+
+if [ -n "$PRIMARY_INTERFACE" ]; then
+    get_ip_info "$PRIMARY_INTERFACE"
+else
+    # Thử các giao diện phổ biến khác nếu không tìm thấy giao diện mặc định
+    for iface in $(ls /sys/class/net | grep -E '^e|^p'); do
+        get_ip_info "$iface"
+    done
+fi
+
+echo ""
