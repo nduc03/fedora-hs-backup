@@ -2,12 +2,14 @@
 Description=Description here; this is a very basic sample Quadlet file
 
 [Container]
-Image=registry.example/user/container:tag # docker shortcut: docker.io/library/<image>:tag, docker.io/<user>/<image>:tag
+# docker shortcut: docker.io/library/<image>:tag, docker.io/<user>/<image>:tag
+Image=registry.example/user/container:tag
 ContainerName=container-name
 PublishPort=<host_port>:<container_port>/tcp
 PublishPort=<host_port>:<container_port>/udp
 PublishPort=<host_port>:<container_port>
 Environment=KEY=val
+EnvironmentFile=/path/to/.env
 Volume=/path/in/host:/path/in/container:Z # :Z for SELinux
 Volume=/path/in/host:/path/in/container:ro # :ro for read-only
 Volume=/etc/localtime:/etc/localtime:ro
@@ -18,5 +20,7 @@ Restart=always
 # more systemd options can be used here, e.g. CPUQuota, MemoryLimit, CPUWeight, etc.
 
 [Install]
-WantedBy=default.target # rootless
-# WantedBy=multi-user.target # system-wide
+# rootless
+WantedBy=default.target
+# system-wide
+# WantedBy=multi-user.target

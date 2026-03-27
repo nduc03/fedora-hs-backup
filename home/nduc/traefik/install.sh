@@ -51,6 +51,20 @@ pre_install() {
 
   echo ">>> Running pre-install hooks for: $SERVICE_NAME"
 
+  mkdir -p "$SERVICE_DATA_DIR/mycert"
+  mkdir -p "$SERVICE_DATA_DIR/config"
+  mkdir -p "$SERVICE_DATA_DIR/secret"
+
+  cp "$SCRIPT_DIR/config/*" "$SERVICE_DATA_DIR/config/"
+
+  echo "CF_DNS_API_TOKEN=" > "$SERVICE_DATA_DIR/secret/cloudflare.env"
+
+  EDIT="n"
+  read -p "cloudflare.env has been created, do you want to edit it now? (y/n) " EDIT
+  if [[ "$EDIT" == "y" ]]; then
+    nano "$SERVICE_DATA_DIR/secret/cloudflare.env"
+  fi
+
 }
 
 post_install() {
@@ -73,18 +87,14 @@ post_install() {
 #* ==========================================
 #* declare an associative array to hold custom template variables and their values
 #* which are about to be injected into the template
-if [[ -f "$SCRIPT_DIR/.env" ]]; then
-  echo ">>> Sourcing environment variables from .env file"
-  source "$SCRIPT_DIR/.env"
-fi
 declare -A CTV
 #* --- VÍ DỤ CẤU HÌNH ---
 #* Nếu trong file .template có thông tin như: "Environment=DB_PASSWORD=%pass%"
 #* Hãy khai báo như bên dưới:
 #* CTV["%pass%"]="mysecretpassword"
 #* CTV["%app_port%"]="8080"
-#* dùng biến ở trong .env nếu cần
 #* ----------------------
+CTV["%domain%"]="hs.lan"
 
 # ==========================================
 # 4. VARIABLE CALCULATION LOGIC
@@ -120,6 +130,11 @@ QUADLET_FILENAME="$SERVICE_NAME.$FILE_TYPE"
 QUADLET_FILE_LOCATION="$SCRIPT_DIR/$QUADLET_FILENAME"
 
 if [[ "$ROOTLESS" = "true" ]]; then
+  if [[ "$EUID" -eq 0 ]]; then
+    echo "Error: You are running as root but ROOTLESS is set to true."
+    echo "Please run this script without 'sudo'."
+    exit 1
+  fi
   INSTALL_LOCATION="$HOME/.config/containers/systemd/"
   SYSTEMCTL_CMD="systemctl --user"
   SUDO=""
@@ -129,14 +144,6 @@ else
   SUDO="sudo"
 fi
 
-# make a temporary directory for temporary target file or backup old quadlets file
-TMP_DIR=$(mktemp -d -t "$SERVICE_NAME-XXXXXXXX")
-trap "rm -rf $TMP_DIR; unset SEARCH_KEY REPLACE_VAL" EXIT
-QUADLET_FILE_LOCATION="$TMP_DIR/$QUADLET_FILENAME"
-
-BACKUP_DIR="$TMP_DIR/backup"
-mkdir -p "$BACKUP_DIR"
-
 HOOK_ARGS=("$SCRIPT_DIR" "$SCRIPT_DIR_NAME" "$SERVICE_NAME"
       "$SERVICE_DATA_DIR" "$HOST_IPV4" "$HOST_ULA_IPV6"
       "$SUDO" "$INSTALL_LOCATION" "$SYSTEMCTL_CMD")
@@ -144,18 +151,6 @@ HOOK_ARGS=("$SCRIPT_DIR" "$SCRIPT_DIR_NAME" "$SERVICE_NAME"
 # ==========================================
 # 5. EXECUTION
 # ==========================================
-echo ">>> Validating execution environment..."
-
-if [[ "$EUID" -eq 0 ]]; then
-  echo ""
-  echo "[ERROR] Root privileges detected."
-  echo "        Please run this script as a standard user (or without 'sudo')."
-  echo "        Note: The script will automatically request 'sudo' access when necessary. " \
-       "Therefore, running this script with 'sudo' is not supported."
-  echo ""
-  exit 1
-fi
-
 echo ">>> Preparing $SERVICE_NAME Quadlet installation..."
 echo "Script directory detected: $SCRIPT_DIR"
 
@@ -169,6 +164,11 @@ if [[ "$USE_TEMPLATE" = "true" ]]; then
     exit 1
   fi
 
+  # make a temporary directory for temporary target file
+  TMP_DIR=$(mktemp -d -t "$SERVICE_NAME-XXXXXXXX")
+  trap "rm -rf $TMP_DIR" EXIT
+  QUADLET_FILE_LOCATION="$TMP_DIR/$QUADLET_FILENAME"
+
   # replace %service_dir% and %host_ipv4% placeholder
   echo ">>> Injecting variables into template..."
   sed -e "s|%service_dir%|$SCRIPT_DIR|g" \
@@ -181,20 +181,8 @@ if [[ "$USE_TEMPLATE" = "true" ]]; then
   echo ">>> Injecting custom variables into template..."
   for key in "${!CTV[@]}"; do
     value="${CTV[$key]}"
-    echo "Injecting %$key%"
-
-    # awk is a safer choice than sed for arbitrary replacement values, as it doesn't require escaping special characters
-    export SEARCH_KEY="$key"
-    export REPLACE_VAL="$value"
-
-    awk '
-    BEGIN { search = ENVIRON["SEARCH_KEY"]; replace = ENVIRON["REPLACE_VAL"]; len = length(search) }
-    {
-        while ( (idx = index($0, search)) > 0 ) {
-            $0 = substr($0, 1, idx - 1) replace substr($0, idx + len)
-        }
-        print
-    }' "$QUADLET_FILE_LOCATION" > "${QUADLET_FILE_LOCATION}.tmp" && mv "${QUADLET_FILE_LOCATION}.tmp" "$QUADLET_FILE_LOCATION"
+    echo "Injecting %$key% with value: $value"
+    sed -i "s|$key|$value|g" "$QUADLET_FILE_LOCATION"
   done
 
 fi
@@ -208,13 +196,6 @@ mkdir -p "$SERVICE_DATA_DIR"
 pre_install "${HOOK_ARGS[@]}"
 
 # Setup quadlet systemd
-
-echo ">>> Backing up current Quadlet definitions..."
-for ext in container network volume; do
-  if [[ -f "$INSTALL_LOCATION/$SERVICE_NAME.$ext" ]]; then
-    cp "$INSTALL_LOCATION/$SERVICE_NAME.$ext" "$BACKUP_DIR/"
-  fi
-done
 
 echo ">>> Installing $QUADLET_FILENAME"
 
@@ -233,45 +214,11 @@ if [[ -f "$SCRIPT_DIR/$SERVICE_NAME.volume" ]]; then
     $SUDO podman quadlet install --replace "$SCRIPT_DIR/$SERVICE_NAME.volume"
 fi
 
-echo ">>> Checking for configuration changes..."
-SERVICE_CHANGED=false
+echo ">>> Reloading systemd daemon to recognize new Quadlet"
+$SYSTEMCTL_CMD daemon-reload
 
-# Kiểm tra tất cả các extension có thể được Podman sinh ra
-for ext in container network volume; do
-  CURRENT_FILE="$INSTALL_LOCATION/$SERVICE_NAME.$ext"
-  BACKUP_FILE="$BACKUP_DIR/$SERVICE_NAME.$ext"
-
-  # Nếu file mới tồn tại
-  if [[ -f "$CURRENT_FILE" ]]; then
-    # Nếu file backup không có (file mới hoàn toàn), HOẶC nội dung khác nhau
-    if [[ ! -f "$BACKUP_FILE" ]] || ! $SUDO cmp -s "$CURRENT_FILE" "$BACKUP_FILE"; then
-      echo "    -> [CHANGED/NEW] $SERVICE_NAME.$ext"
-      SERVICE_CHANGED=true
-    fi
-  # Nếu file mới không có, nhưng file backup lại có (cấu hình bị xóa khỏi .quadlet)
-  elif [[ -f "$BACKUP_FILE" ]]; then
-    echo "    -> [REMOVED] $SERVICE_NAME.$ext"
-    SERVICE_CHANGED=true
-  fi
-done
-
-# quyết định restart dựa trên cấu hình có thay đổi hay không
-if [[ "$SERVICE_CHANGED" == "true" ]]; then
-  echo ">>> Changes applied. Reloading systemd daemon..."
-  $SYSTEMCTL_CMD daemon-reload
-
-  echo ">>> Restarting $SERVICE_NAME container..."
-  $SYSTEMCTL_CMD restart "$SERVICE_NAME"
-else
-  echo ">>> No configuration changes detected. Skipping daemon-reload."
-
-  if ! $SYSTEMCTL_CMD is-active --quiet "$SERVICE_NAME"; then
-    echo ">>> Service is currently down. Starting $SERVICE_NAME..."
-    $SYSTEMCTL_CMD start "$SERVICE_NAME"
-  else
-    echo ">>> Service is already running."
-  fi
-fi
+echo ">>> Starting $SERVICE_NAME container..."
+$SYSTEMCTL_CMD restart $SERVICE_NAME
 
 post_install "${HOOK_ARGS[@]}"
 
