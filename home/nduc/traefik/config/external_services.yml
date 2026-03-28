@@ -1,0 +1,28 @@
+http:
+  serversTransports:
+    ont-tls:
+      insecureSkipVerify: true
+
+  routers:
+    ont:
+      rule: "Host(`ont.lan`)"
+      service: ont
+      entryPoints:
+        - websecure
+      tls: {}
+    filebrowser:
+      rule: "Host(`file.hs.lan`)"
+      service: filebrowser
+      entryPoints:
+        - websecure
+      tls: {}
+
+  services:
+    ont:
+      loadBalancer:
+        servers:
+          - url: "https://192.168.1.1/"
+    filebrowser:
+      loadBalancer:
+        servers:
+          - url: "http://host.containers.internal:9000/"

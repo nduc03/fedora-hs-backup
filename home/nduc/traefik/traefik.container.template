@@ -7,25 +7,30 @@ Image=docker.io/library/traefik:v3.6
 ContainerName=traefik
 Network=traefik.network
 
-PodmanArgs=--api.insecure=true
-PodmanArgs=--providers.docker=true
-PodmanArgs=--entrypoints.web.address=:80
-PodmanArgs=--entrypoints.web.http.redirections.entrypoint.to=websecure
-PodmanArgs=--entrypoints.web.http.redirections.entrypoint.scheme=https
-PodmanArgs=--entrypoints.web.http.redirections.entrypoint.permanent=true
-PodmanArgs=--entrypoints.websecure.address=:443
-PodmanArgs=--entrypoints.websecure.http.tls=true
-
-EnvironmentFile=%service_data_dir%/secret/cloudflare.env
+Exec=--providers.docker=true \
+     --entrypoints.web.address=:80 \
+     --entrypoints.web.http.redirections.entrypoint.to=websecure \
+     --entrypoints.web.http.redirections.entrypoint.scheme=https \
+     --entrypoints.web.http.redirections.entrypoint.permanent=true \
+     --entrypoints.websecure.address=:443 \
+     --entrypoints.websecure.http.tls=true \
+     --api.dashboard=true \
+     --log.level=INFO \
+     --accesslog=true \
+     --providers.docker.defaultRule=Host(`{{ index .Labels "host.subdomain" | default .Name }}.%domain%`)
 
 Label=traefik.enable=true
 Label=traefik.http.routers.dashboard.rule=Host(`traefik.%domain%`)
 Label=traefik.http.routers.dashboard.entrypoints=websecure
 Label=traefik.http.routers.dashboard.service=api@internal
 Label=traefik.http.routers.dashboard.tls=true
+Label=traefik.http.middlewares.dashboard-auth.basicauth.users=%dashboard_auth_cred%
+Label=traefik.http.routers.dashboard.middlewares=dashboard-auth@docker
 
 PublishPort=80:80
+PublishPort=%host_ula_ipv6%:80:80
 PublishPort=443:443
+PublishPort=%host_ula_ipv6%:443:443
 PublishPort=8080:8080
 
 Volume=/run/user/1000/podman/podman.sock:/var/run/docker.sock:ro

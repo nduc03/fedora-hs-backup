@@ -1,0 +1,8 @@
+tls:
+  certificates:
+    - certFile: /mycerts/wildcard.hs.lan/hs-end-entity-ecdsa.pem.crt
+      keyFile:  /mycerts/wildcard.hs.lan/hs-end-entity-ecdsa.pem.key
+    - certFile: /mycerts/dns.lan/hs-end-entity-ecdsa.pem.crt
+      keyFile:  /mycerts/dns.lan/hs-end-entity-ecdsa.pem.key
+    - certFile: /mycerts/ont.lan/hs-end-entity-ecdsa.pem.crt
+      keyFile:  /mycerts/ont.lan/hs-end-entity-ecdsa.pem.key
