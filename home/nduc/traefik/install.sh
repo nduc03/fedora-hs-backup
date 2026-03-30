@@ -53,11 +53,19 @@ pre_install() {
 
   rm -f "$SCRIPT_DIR/mycert/.gitignore" || true
   rm -f "$SCRIPT_DIR/secret/.gitignore" || true
-  rm -f "$SCRIPT_DIR/secret/ctv.env" || true
+  mv "$SCRIPT_DIR/secret/ctv.env" "$SCRIPT_DIR/ctv.env" || true
 
-  mv "$SCRIPT_DIR/mycert/"  "$SERVICE_DATA_DIR/mycert" || true
-  mv "$SCRIPT_DIR/config/"  "$SERVICE_DATA_DIR/config" || true
+  mv "$SCRIPT_DIR/mycerts/"  "$SERVICE_DATA_DIR/mycerts" || true
+  mv "$SCRIPT_DIR/dynamic/"  "$SERVICE_DATA_DIR/dynamic" || true
+  mv "$SCRIPT_DIR/etc/traefik/"  "$SERVICE_DATA_DIR/etc/traefik" || true
   mv "$SCRIPT_DIR/secrets/" "$SERVICE_DATA_DIR/secret" || true
+
+  echo ">>> Configuring SELinux policy to access podman socket..."
+  sudo ausearch -c 'traefik' --raw | sudo audit2allow -M my-traefik
+  sudo semodule -X 300 -i my-traefik.pp
+
+  echo ">>> Setting ownership for $SERVICE_DATA_DIR..."
+  podman unshare chown -R 1000:1000 "$SERVICE_DATA_DIR"
 }
 
 post_install() {

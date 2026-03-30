@@ -1,3 +1,12 @@
+tls:
+  certificates:
+    - certFile: /mycert/wildcard.hs.lan/hs-end-entity-ecdsa.pem.crt
+      keyFile:  /mycert/wildcard.hs.lan/hs-end-entity-ecdsa.pem.key
+    - certFile: /mycert/dns.lan/hs-end-entity-ecdsa.pem.crt
+      keyFile:  /mycert/dns.lan/hs-end-entity-ecdsa.pem.key
+    - certFile: /mycert/ont.lan/hs-end-entity-ecdsa.pem.crt
+      keyFile:  /mycert/ont.lan/hs-end-entity-ecdsa.pem.key
+
 http:
   serversTransports:
     skip-tls:

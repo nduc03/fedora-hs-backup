@@ -18,10 +18,10 @@ Exec=--providers.docker=true \
      --api.insecure=false \
      --log.level=INFO \
      --accesslog=true \
-     --providers.docker.defaultRule=Host(`{{ index .Labels "host.subdomain" | default .Name }}.%domain%`)
-
+     --providers.docker.defaultRule=Host(`{{ index .Labels "host.subdomain" | default .Name }}.hs.lan`)
+     
 Label=traefik.enable=true
-Label=traefik.http.routers.dashboard.rule=Host(`traefik.%domain%`)
+Label=traefik.http.routers.dashboard.rule=Host(`traefik.hs.lan`)
 Label=traefik.http.routers.dashboard.entrypoints=websecure
 Label=traefik.http.routers.dashboard.service=api@internal
 Label=traefik.http.routers.dashboard.tls=true
@@ -33,10 +33,11 @@ PublishPort=%host_ula_ipv6%:80:80
 PublishPort=%host_ipv4%:443:443
 PublishPort=%host_ula_ipv6%:443:443
 
-Volume=/run/user/1000/podman/podman.sock:/var/run/docker.sock:ro
+Volume=/run/user/1000/podman/podman.sock:/var/run/docker.sock:Z,ro
 Volume=/etc/localtime:/etc/localtime:ro
-Volume=%service_data_dir%/config:/etc/traefik:ro
-Volume=%service_data_dir%/mycert:/mycert:ro
+Volume=%service_data_dir%/dynamic:/dynamic:Z,ro
+Volume=%service_data_dir%/etc/traefik:/etc/traefik:Z,ro
+Volume=%service_data_dir%/mycerts:/mycerts:Z,ro
 
 [Service]
 Restart=always

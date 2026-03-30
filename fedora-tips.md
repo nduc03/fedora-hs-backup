@@ -15,6 +15,16 @@ sudo semanage fcontext -a -t bin_t "/usr/local/bin/myscript.sh"
 sudo restorecon -v /usr/local/bin/myscript.sh
 ```
 
+Cho folder
+```bash
+# 1. Thêm định nghĩa context mới cho folder /usr/local/bin (ví dụ ở đây gán type là bin_t)
+sudo semanage fcontext -a -t bin_t "/usr/local/bin(/.*)?"
+
+# 2. Áp dụng (restore) context đã định nghĩa lên folder
+sudo restorecon -Rv /usr/local/bin/
+```
+
+
 ---
 
 ## 2. Port Forwarding với Firewalld

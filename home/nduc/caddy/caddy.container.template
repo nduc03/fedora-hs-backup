@@ -13,7 +13,7 @@ Volume=/etc/localtime:/etc/localtime:ro
 DNS=1.1.1.1
 Network=traefik.network
 Label=traefik.enable=true
-Label=host.subdomain=web
+Label=traefik.http.routers.whoami.rule=Host(`web.hs.lan`)
 Label=traefik.http.routers.dashboard.entrypoints=websecure
 Label=traefik.http.routers.dashboard.tls=true
 

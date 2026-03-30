@@ -1,0 +1,5 @@
+providers:
+  docker:
+    exposedByDefault: false
+  file:
+    directory: "/config"
