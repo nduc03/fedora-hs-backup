@@ -1,8 +1,8 @@
 [Container]
 ContainerName=caddy
 Image=docker.io/caddy/caddy:2.10-alpine
-PublishPort=80:80/tcp
-PublishPort=443:443/tcp
+PublishPort=6080:80/tcp
+# PublishPort=443:443/tcp
 
 Volume=%service_dir%/webroot:/srv:Z
 Volume=%service_dir%/conf:/etc/caddy:Z
@@ -11,7 +11,11 @@ Volume=%service_dir%/caddy_config:/config:Z
 Volume=%service_dir%/mycerts:/mycerts:Z,ro
 Volume=/etc/localtime:/etc/localtime:ro
 DNS=1.1.1.1
-Network=caddy.network
+Network=traefik.network
+Label=traefik.enable=true
+Label=host.subdomain=web
+Label=traefik.http.routers.dashboard.entrypoints=websecure
+Label=traefik.http.routers.dashboard.tls=true
 
 [Service]
 Restart=always

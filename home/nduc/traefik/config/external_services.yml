@@ -1,8 +1,9 @@
 http:
   serversTransports:
-    ont-tls:
+    skip-tls:
       insecureSkipVerify: true
 
+  # system or external services
   routers:
     ont:
       rule: "Host(`ont.lan`)"
@@ -10,6 +11,8 @@ http:
       entryPoints:
         - websecure
       tls: {}
+      serversTransports: skip-tls
+
     filebrowser:
       rule: "Host(`file.hs.lan`)"
       service: filebrowser
@@ -17,12 +20,79 @@ http:
         - websecure
       tls: {}
 
+    cockpit:
+      rule: "Host(`cockpit.hs.lan`)"
+      service: cockpit
+      entryPoints:
+        - websecure
+      tls: {}
+      serversTransports: skip-tls
+
+    # containerized services
+    forgejo:
+      rule: "Host(`forgejo.hs.lan`)"
+      service: forgejo
+      entryPoints:
+        - websecure
+      tls: {}
+      priority: 1
+
+    share:
+      rule: "Host(`share.hs.lan`)"
+      service: share
+      entryPoints:
+        - websecure
+      tls: {}
+      priority: 1
+
+    ha:
+      rule: "Host(`ha.hs.lan`)"
+      service: ha
+      entryPoints:
+        - websecure
+      tls: {}
+      priority: 1
+
+    dns:
+      rule: "Host(`dns.lan`)"
+      service: dns
+      entryPoints:
+        - websecure
+      tls: {}
+      priority: 1
+
   services:
     ont:
       loadBalancer:
         servers:
           - url: "https://192.168.1.1/"
+
     filebrowser:
       loadBalancer:
         servers:
           - url: "http://host.containers.internal:9000/"
+
+    cockpit:
+      loadBalancer:
+        servers:
+          - url: "http://host.containers.internal:9090/"
+
+    forgejo:
+      loadBalancer:
+        servers:
+          - url: "http://host.containers.internal:3000/"
+
+    share:
+      loadBalancer:
+        servers:
+          - url: "http://psitransfer-private:3000/"
+
+    ha:
+      loadBalancer:
+        servers:
+          - url: "http://host.containers.internal:8123/"
+
+    dns:
+      loadBalancer:
+        servers:
+          - url: "http://host.containers.internal:8686/"

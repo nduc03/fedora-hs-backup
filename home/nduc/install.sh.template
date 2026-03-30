@@ -145,9 +145,10 @@ QUADLET_FILE_LOCATION="$TMP_DIR/$QUADLET_FILENAME"
 BACKUP_DIR="$TMP_DIR/backup"
 
 TRAEFIK_LABELS=$(cat << EOF
+Network=traefik.network
 Label=host.subdomain=$SERVICE_NAME
 Label=traefik.http.routers.$SERVICE_NAME.entrypoints=websecure
-Label=traefik.http.routers.$SERVICE_NAME.service=api@internal
+Label=traefik.http.routers.$SERVICE_NAME.service=$SERVICE_NAME@internal
 Label=traefik.http.routers.$SERVICE_NAME.tls=true
 Label=traefik.http.services.$SERVICE_NAME.loadbalancer.server.url=http://host.container.internal:$HTTP_PORT
 EOF

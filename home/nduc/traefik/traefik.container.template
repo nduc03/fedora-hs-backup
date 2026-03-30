@@ -15,7 +15,7 @@ Exec=--providers.docker=true \
      --entrypoints.websecure.address=:443 \
      --entrypoints.websecure.http.tls=true \
      --api.dashboard=true \
-     --api.insecure=true \
+     --api.insecure=false \
      --log.level=INFO \
      --accesslog=true \
      --providers.docker.defaultRule=Host(`{{ index .Labels "host.subdomain" | default .Name }}.%domain%`)
@@ -32,7 +32,6 @@ PublishPort=%host_ipv4%:80:80
 PublishPort=%host_ula_ipv6%:80:80
 PublishPort=%host_ipv4%:443:443
 PublishPort=%host_ula_ipv6%:443:443
-PublishPort=8080:8080
 
 Volume=/run/user/1000/podman/podman.sock:/var/run/docker.sock:ro
 Volume=/etc/localtime:/etc/localtime:ro
