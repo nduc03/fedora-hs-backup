@@ -15,6 +15,7 @@ Exec=--providers.docker=true \
      --entrypoints.websecure.address=:443 \
      --entrypoints.websecure.http.tls=true \
      --api.dashboard=true \
+     --api.insecure=true \
      --log.level=INFO \
      --accesslog=true \
      --providers.docker.defaultRule=Host(`{{ index .Labels "host.subdomain" | default .Name }}.%domain%`)
@@ -27,9 +28,9 @@ Label=traefik.http.routers.dashboard.tls=true
 Label=traefik.http.middlewares.dashboard-auth.basicauth.users=%dashboard_auth_cred%
 Label=traefik.http.routers.dashboard.middlewares=dashboard-auth@docker
 
-PublishPort=80:80
+PublishPort=%host_ipv4%:80:80
 PublishPort=%host_ula_ipv6%:80:80
-PublishPort=443:443
+PublishPort=%host_ipv4%:443:443
 PublishPort=%host_ula_ipv6%:443:443
 PublishPort=8080:8080
 
