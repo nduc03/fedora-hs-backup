@@ -1,11 +1,11 @@
 tls:
   certificates:
-    - certFile: /mycert/wildcard.hs.lan/hs-end-entity-ecdsa.pem.crt
-      keyFile:  /mycert/wildcard.hs.lan/hs-end-entity-ecdsa.pem.key
-    - certFile: /mycert/dns.lan/hs-end-entity-ecdsa.pem.crt
-      keyFile:  /mycert/dns.lan/hs-end-entity-ecdsa.pem.key
-    - certFile: /mycert/ont.lan/hs-end-entity-ecdsa.pem.crt
-      keyFile:  /mycert/ont.lan/hs-end-entity-ecdsa.pem.key
+    - certFile: /mycerts/wildcard.hs.lan/hs-end-entity-ecdsa.pem.crt
+      keyFile:  /mycerts/wildcard.hs.lan/hs-end-entity-ecdsa.pem.key
+    - certFile: /mycerts/dns.lan/hs-end-entity-ecdsa.pem.crt
+      keyFile:  /mycerts/dns.lan/hs-end-entity-ecdsa.pem.key
+    - certFile: /mycerts/ont.lan/hs-end-entity-ecdsa.pem.crt
+      keyFile:  /mycerts/ont.lan/hs-end-entity-ecdsa.pem.key
 
 http:
   serversTransports:
@@ -20,7 +20,6 @@ http:
       entryPoints:
         - websecure
       tls: {}
-      serversTransports: skip-tls
 
     filebrowser:
       rule: "Host(`file.hs.lan`)"
@@ -35,7 +34,6 @@ http:
       entryPoints:
         - websecure
       tls: {}
-      serversTransports: skip-tls
 
     # containerized services
     forgejo:
@@ -73,6 +71,7 @@ http:
   services:
     ont:
       loadBalancer:
+        serversTransport: skip-tls
         servers:
           - url: "https://192.168.1.1/"
 
@@ -83,8 +82,9 @@ http:
 
     cockpit:
       loadBalancer:
+        serversTransport: skip-tls
         servers:
-          - url: "http://host.containers.internal:9090/"
+          - url: "https://host.containers.internal:9090/"
 
     forgejo:
       loadBalancer:

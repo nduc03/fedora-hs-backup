@@ -51,20 +51,21 @@ pre_install() {
 
   echo ">>> Running pre-install hooks for: $SERVICE_NAME"
 
+  echo "running this script multiple times will complicate the container data permissions."
+  echo "therefore, to prevent the script from failing, the script will use sudo."
+
   rm -f "$SCRIPT_DIR/mycert/.gitignore" || true
-  rm -f "$SCRIPT_DIR/secret/.gitignore" || true
-  mv "$SCRIPT_DIR/secret/ctv.env" "$SCRIPT_DIR/ctv.env" || true
+  rm -f "$SCRIPT_DIR/secrets/.gitignore" || true
+  mv "$SCRIPT_DIR/secrets/ctv.env" "$SCRIPT_DIR/ctv.env.bak" || true
 
-  mv "$SCRIPT_DIR/mycerts/"  "$SERVICE_DATA_DIR/mycerts" || true
-  mv "$SCRIPT_DIR/dynamic/"  "$SERVICE_DATA_DIR/dynamic" || true
-  mv "$SCRIPT_DIR/etc/traefik/"  "$SERVICE_DATA_DIR/etc/traefik" || true
-  mv "$SCRIPT_DIR/secrets/" "$SERVICE_DATA_DIR/secret" || true
-
-  echo ">>> Configuring SELinux policy to access podman socket..."
-  sudo ausearch -c 'traefik' --raw | sudo audit2allow -M my-traefik
-  sudo semodule -X 300 -i my-traefik.pp
+  sudo mv "$SCRIPT_DIR/mycerts/"  "$SERVICE_DATA_DIR/mycerts" || true
+  sudo mv "$SCRIPT_DIR/dynamic/"  "$SERVICE_DATA_DIR/dynamic" || true
+  mkdir -p "$SERVICE_DATA_DIR/etc/traefik" || true
+  sudo mv "$SCRIPT_DIR/etc/traefik/traefik.yml"  "$SERVICE_DATA_DIR/etc/traefik/traefik.yml" || true
+  sudo mv "$SCRIPT_DIR/secrets/" "$SERVICE_DATA_DIR/secrets" || true
 
   echo ">>> Setting ownership for $SERVICE_DATA_DIR..."
+  sudo chown -R 1000:1000 "$SERVICE_DATA_DIR"
   podman unshare chown -R 1000:1000 "$SERVICE_DATA_DIR"
 }
 
@@ -81,6 +82,19 @@ post_install() {
 
   echo ">>> Running post-install hooks for: $SERVICE_NAME"
 
+  echo "Traefik may fail to start at the first installation due to SELinux block traefik accessing podman socket."
+  echo "This is expected, not an error."
+  echo "The script will automatically fix this issue by configuring SELinux policy and restart the service."
+
+  echo "Waiting 10 seconds for $SERVICE_NAME to start and running into SELinux permission denied..."
+
+  sleep 10
+
+  echo ">>> Configuring SELinux policy to access podman socket..."
+  sudo ausearch -c 'traefik' --raw | sudo audit2allow -M my-traefik
+  sudo semodule -X 300 -i my-traefik.pp
+
+  $SYSTEMCTL_CMD restart "$SERVICE_NAME"
 }
 
 #* =========================================
@@ -94,7 +108,6 @@ declare -A CTV
 #* Hãy khai báo như bên dưới:
 #* CTV["%pass%"]="mysecretpassword"
 #* CTV["%app_port%"]="8080"
-CTV["%domain%"]="hs.lan"
 #* -----------------------------------------
 
 
