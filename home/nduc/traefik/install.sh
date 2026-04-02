@@ -94,6 +94,8 @@ post_install() {
   sudo ausearch -c 'traefik' --raw | sudo audit2allow -M my-traefik
   sudo semodule -X 300 -i my-traefik.pp
 
+  echo ">>> Restarting $SERVICE_NAME..."
+
   $SYSTEMCTL_CMD restart "$SERVICE_NAME"
 }
 

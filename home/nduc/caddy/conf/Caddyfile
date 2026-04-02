@@ -1,97 +1,15 @@
 {
     admin off
+    auto_https off
 }
 
-*.nduc.id.vn {
-    tls /mycerts/cloudflare-cert/nduc.id.vn.pem /mycerts/cloudflare-cert/nduc.id.vn.key
+web.hs.lan:80 {
+    root * /srv
+    file_server browse
 }
 
-*.hs.lan {
-    tls /mycerts/wildcard.hs.lan/hs-end-entity-ecdsa.pem.crt /mycerts/wildcard.hs.lan/hs-end-entity-ecdsa.pem.key
-
-    @web host web.hs.lan
-    handle @web {
-        root * /srv
-        file_server browse
-    }
-
-    @file host file.hs.lan
-    handle @file {
-        reverse_proxy host.containers.internal:9000
-    }
-
-    @cockpit host cockpit.hs.lan
-    handle @cockpit {
-        reverse_proxy host.containers.internal:9090 {
-            transport http {
-                tls_insecure_skip_verify
-            }
-        }
-    }
-
-    @forgejo host forgejo.hs.lan
-    handle @forgejo {
-        reverse_proxy host.containers.internal:3000
-    }
-
-    @share host share.hs.lan
-    handle @share {
-        reverse_proxy psitransfer-private:3000
-    }
-
-    @ha host ha.hs.lan
-    handle @ha {
-        reverse_proxy host.containers.internal:8123
-    }
-
-    @ping host ping.hs.lan
-    handle @ping {
-        header Content-Type text/plain
-        respond "ALIVE" 200
-    }
-
-    handle {
-        root * /srv/
-        rewrite * /404.html
-        file_server
-    }
-}
-
-*.hs.lan:80 {
-	redir https://{host}{uri}
-}
-
-dns.lan {
-    tls /mycerts/dns.lan/hs-end-entity-ecdsa.pem.crt /mycerts/dns.lan/hs-end-entity-ecdsa.pem.key
-
-    reverse_proxy host.containers.internal:8686
-}
-
-dns.lan:80 {
-    redir https://{host}{uri}
-}
-
-ont.lan {
-    tls /mycerts/ont.lan/hs-end-entity-ecdsa.pem.crt /mycerts/ont.lan/hs-end-entity-ecdsa.pem.key
-    reverse_proxy 192.168.1.1:443 {
-		transport http {
-			tls_insecure_skip_verify
-		}
-	}
-}
-
-ont.lan:80 {
-    redir https://{host}{uri}
-}
-
-:80 {
-    root * /srv/
-    rewrite * /404.html
-    file_server
-}
-
-:443 {
-    root * /srv/
-    rewrite * /404.html
+nduc.io.vn:80 {
+    root * /srv
+    serve * /srv/404.html
     file_server
 }
