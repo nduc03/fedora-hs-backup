@@ -1,33 +1,33 @@
 http:
   routers:
     filebrowser-public:
-      rule: "Host(`file.hs.nduc.io.vn`)"
+      rule: "Host(`file-hs.nduc.io.vn`)"
       service: filebrowser
       entryPoints:
         - web
 
     cockpit-public:
-      rule: "Host(`cockpit.hs.nduc.io.vn`)"
+      rule: "Host(`cockpit-hs.nduc.io.vn`)"
       service: cockpit
       entryPoints:
         - web
 
     forgejo-public:
-      rule: "Host(`forgejo.hs.nduc.io.vn`)"
+      rule: "Host(`forgejo-hs.nduc.io.vn`)"
       service: forgejo
       entryPoints:
         - web
       priority: 1
 
     share-public:
-      rule: "Host(`share.hs.nduc.io.vn`)"
+      rule: "Host(`share-hs.nduc.io.vn`)"
       service: share
       entryPoints:
         - web
       priority: 1
 
     ha-public:
-      rule: "Host(`ha.hs.nduc.io.vn`)"
+      rule: "Host(`ha-hs.nduc.io.vn`)"
       service: ha
       entryPoints:
         - web
