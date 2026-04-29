@@ -1,0 +1,13 @@
+user hs
+topic read relay1/status
+topic write relay1/control
+topic read relay2/status
+topic write relay2/control
+topic read esp32relay/availability
+
+user esp32
+topic readwrite relay1/status
+topic read relay1/control
+topic readwrite relay2/status
+topic read relay2/control
+topic write esp32relay/availability

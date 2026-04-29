@@ -1,0 +1,15 @@
+[Unit]
+Description=root systemd template Service
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/nduc/%placeholder%
+Restart=on-failure
+User=root
+StartdardOutput=journal
+StartdardError=journal
+WorkingDirectory=%placeholder%
+
+[Install]
+WantedBy=multi-user.target

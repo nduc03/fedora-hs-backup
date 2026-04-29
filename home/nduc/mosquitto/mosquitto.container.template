@@ -1,0 +1,17 @@
+[Unit]
+Description=mqtt broker
+
+[Container]
+Image=docker.io/library/eclipse-mosquitto:openssl
+ContainerName=mosquitto
+PublishPort=1883:1883
+Volume=%service_dir%/config:/mosquitto/config:Z
+Volume=%service_dir%/data:/mosquitto/data:Z
+Volume=/etc/localtime:/etc/localtime:ro
+DNS=1.1.1.1
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

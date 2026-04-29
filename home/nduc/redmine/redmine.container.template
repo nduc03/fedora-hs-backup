@@ -1,0 +1,17 @@
+[Unit]
+Description=Redmine
+
+[Container]
+Image=docker.io/library/redmine:6.1-alpine
+ContainerName=redmine
+PublishPort=3690:3000/tcp
+EnvironmentFile=%service_dir%/var.env
+Volume=%service_data_dir%:/usr/src/redmine/files:Z
+Volume=/etc/localtime:/etc/localtime:ro
+==%traefik_labels%==
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

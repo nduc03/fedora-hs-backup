@@ -1,0 +1,15 @@
+[Unit]
+Description=Auto update dynamic IP to Cloudflare DNS
+After=network.target
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=3
+ExecStart=/usr/bin/python3 /usr/local/libexec/cloudflare-ddns/main.py
+EnvironmentFile=/etc/cloudflare-ddns/.env
+StandardOutput=append:/var/log/cloudflare-ddns/service-output.txt
+StandardError=append:/var/log/cloudflare-ddns/service-error.txt
+
+[Install]
+WantedBy=default.target

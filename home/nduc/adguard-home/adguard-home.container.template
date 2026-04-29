@@ -1,0 +1,24 @@
+[Unit]
+Description=AdGuard Home DNS Server
+
+[Container]
+Image=docker.io/adguard/adguardhome:latest
+ContainerName=adguard-home
+Volume=%service_dir%/work:/opt/adguardhome/work:Z
+Volume=%service_dir%/conf:/opt/adguardhome/conf:Z
+Volume=/etc/localtime:/etc/localtime:ro
+PublishPort=8686:80/tcp
+PublishPort=%host_ipv4%:53:53/tcp
+PublishPort=%host_ipv4%:53:53/udp
+PublishPort=%host_ula_ipv6%:53:53/tcp
+PublishPort=%host_ula_ipv6%:53:53/udp
+PublishPort=853:853/tcp
+PublishPort=853:853/udp
+%EXTRA_PORT_PLACEHOLDER%
+
+[Service]
+Restart=always
+CPUWeight=300
+
+[Install]
+WantedBy=default.target

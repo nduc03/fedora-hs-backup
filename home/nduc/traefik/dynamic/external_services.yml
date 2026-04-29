@@ -1,0 +1,94 @@
+tls:
+  certificates:
+    - certFile: /mycerts/wildcard.hs.lan/hs-end-entity-ecdsa.pem.crt
+      keyFile:  /mycerts/wildcard.hs.lan/hs-end-entity-ecdsa.pem.key
+    - certFile: /mycerts/dns.lan/hs-end-entity-ecdsa.pem.crt
+      keyFile:  /mycerts/dns.lan/hs-end-entity-ecdsa.pem.key
+    - certFile: /mycerts/ont.lan/hs-end-entity-ecdsa.pem.crt
+      keyFile:  /mycerts/ont.lan/hs-end-entity-ecdsa.pem.key
+
+http:
+  serversTransports:
+    skip-tls:
+      insecureSkipVerify: true
+
+  # system or external services
+  routers:
+    ont:
+      rule: "Host(`ont.lan`)"
+      service: ont
+      entryPoints:
+        - websecure
+      tls: {}
+
+    filebrowser:
+      rule: "Host(`file.hs.lan`)"
+      service: filebrowser
+      entryPoints:
+        - websecure
+      tls: {}
+
+    cockpit:
+      rule: "Host(`cockpit.hs.lan`)"
+      service: cockpit
+      entryPoints:
+        - websecure
+      tls: {}
+
+    # containerized services
+    forgejo:
+      rule: "Host(`forgejo.hs.lan`)"
+      service: forgejo
+      entryPoints:
+        - websecure
+      tls: {}
+      priority: 1
+
+    ha:
+      rule: "Host(`ha.hs.lan`)"
+      service: ha
+      entryPoints:
+        - websecure
+      tls: {}
+      priority: 1
+
+    dns:
+      rule: "Host(`dns.lan`)"
+      service: dns
+      entryPoints:
+        - websecure
+      tls: {}
+      priority: 1
+
+  services:
+    ont:
+      loadBalancer:
+        serversTransport: skip-tls
+        servers:
+          - url: "https://192.168.1.1/"
+
+    filebrowser:
+      loadBalancer:
+        servers:
+          - url: "http://host.containers.internal:9000/"
+
+    cockpit:
+      loadBalancer:
+        serversTransport: skip-tls
+        servers:
+          - url: "https://host.containers.internal:9090/"
+
+    forgejo:
+      loadBalancer:
+        servers:
+          - url: "http://host.containers.internal:3000/"
+
+    ha:
+      loadBalancer:
+        servers:
+          - url: "http://host.containers.internal:8123/"
+
+    dns:
+      loadBalancer:
+        servers:
+          - url: "http://host.containers.internal:8686/"

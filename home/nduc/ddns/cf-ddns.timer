@@ -1,0 +1,14 @@
+[Unit]
+Description=Timer for Cloudflare DDNS script
+
+[Timer]
+# Chạy lần đầu tiên sau khi khởi động máy 1 phút
+OnBootSec=1min
+# Sau đó cứ mỗi 5 phút chạy 1 lần (tính từ lần chạy cuối cùng)
+OnUnitActiveSec=5min
+
+# Nếu bạn muốn chạy chuẩn xác theo phút của đồng hồ (ví dụ: 12:00, 12:05, 12:10) thay vì đếm ngược 5 phút từ khi boot, thì xóa 2 dòng trên và dùng dòng dưới:
+# OnCalendar=*:0/5
+
+[Install]
+WantedBy=timers.target

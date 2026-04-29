@@ -1,0 +1,15 @@
+{
+    admin off
+    auto_https off
+}
+
+web.hs.lan:80 {
+    root * /srv
+    file_server browse
+}
+
+nduc.io.vn:80 {
+    root * /srv
+    serve * /srv/404.html
+    file_server
+}

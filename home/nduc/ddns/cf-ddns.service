@@ -1,0 +1,10 @@
+[Unit]
+Description=Auto update dynamic IP to Cloudflare DNS
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/user/ddns/main.py
+EnvironmentFile=/home/user/ddns/.env
+
+# Bỏ Install đi vì file timer sẽ làm nhiệm vụ gọi file service này.

@@ -1,0 +1,13 @@
+[Unit]
+Description=FileBrowser Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/home/nduc/filebrowser/filebrowser -a 0.0.0.0 -p 9000 -r /
+Restart=on-failure
+User=root
+WorkingDirectory=/
+
+[Install]
+WantedBy=multi-user.target
