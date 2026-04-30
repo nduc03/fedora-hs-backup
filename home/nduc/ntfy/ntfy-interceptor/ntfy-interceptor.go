@@ -8,14 +8,17 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path"
 	"strconv"
 	"sync"
 	"time"
+	"strings"
 )
 
 var (
 	maxFailedAttempts = 10
 	resetInterval     = 1 * time.Minute
+	maxTrackedUsers   = 1000 // Giới hạn số lượng user lưu trong map
 )
 
 type contextKey string
@@ -41,6 +44,13 @@ func init() {
 			log.Printf("Đã load cấu hình RESET_INTERVAL_MINUTES = %d phút", val)
 		}
 	}
+
+	if usersStr := os.Getenv("MAX_TRACKED_USERS"); usersStr != "" {
+		if val, err := strconv.Atoi(usersStr); err == nil && val > 0 {
+			maxTrackedUsers = val
+			log.Printf("Đã load cấu hình MAX_TRACKED_USERS = %d", maxTrackedUsers)
+		}
+	}
 }
 
 // Hàm kiểm tra kết nối tới backend
@@ -57,6 +67,25 @@ func waitForBackend(address string, retryInterval time.Duration) {
 		log.Printf("Backend %s chưa sẵn sàng (%v). Thử lại sau %v...", address, err, retryInterval)
 		time.Sleep(retryInterval)
 	}
+}
+
+// Lấy IP thật từ Header do Cloudflare truyền về
+func getRealIP(r *http.Request) string {
+	// 1. Ưu tiên cao nhất: Header độc quyền của Cloudflare
+	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
+		return ip
+	}
+
+	// 2. Fallback: Header tiêu chuẩn của các hệ thống Proxy
+	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
+		// X-Forwarded-For có thể chứa nhiều IP cách nhau bởi dấu phẩy (Client, Proxy1, Proxy2)
+		// IP đầu tiên luôn là IP của Client
+		ips := strings.Split(ip, ",")
+		return strings.TrimSpace(ips[0])
+	}
+
+	// 3. Fallback cuối cùng: Trả về IP mạng nội bộ (thường sẽ là 127.0.0.1 nếu dùng cloudflared)
+	return r.RemoteAddr
 }
 
 func main() {
@@ -83,11 +112,15 @@ func main() {
 	proxy.ModifyResponse = func(resp *http.Response) error {
 		if resp.StatusCode == http.StatusUnauthorized {
 			req := resp.Request
-			if req.URL.Path == "/v1/account/token" {
+			// Chuẩn hóa path để tránh bypass //v1/account/token/
+			cleanedPath := path.Clean(req.URL.Path)
+
+			if cleanedPath == "/v1/account/token" {
 				if username, ok := req.Context().Value(usernameKey).(string); ok {
 					mu.Lock()
 					failedAttempts[username]++
-					log.Printf("[Cảnh báo] Sai mật khẩu tài khoản '%s' - Số lần thử: %d/%d", username, failedAttempts[username], maxFailedAttempts)
+					log.Printf("[Cảnh báo] Sai mật khẩu tài khoản '%s' - Số lần thử: %d/%d (IP: %s)",
+						username, failedAttempts[username], maxFailedAttempts, getRealIP(req))
 					mu.Unlock()
 				}
 			}
@@ -96,7 +129,23 @@ func main() {
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/account/token" {
+		// Chuẩn hóa path trước khi kiểm tra
+		cleanedPath := path.Clean(r.URL.Path)
+
+		if cleanedPath == "/v1/account/token" {
+			// 1. Kiểm tra tổng số lượng user đang bị theo dõi trong map
+			mu.Lock()
+			totalTracked := len(failedAttempts)
+			mu.Unlock()
+
+			if totalTracked >= maxTrackedUsers {
+				// Nếu map đã đầy, chặn toàn bộ request đến endpoint này để chống cạn kiệt tài nguyên bộ nhớ
+				log.Printf("[BLOCK - Global] Chặn request từ IP %s do bộ nhớ đã đạt tối đa %d users theo dõi", getRealIP(r), maxTrackedUsers)
+				w.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
+
+			// 2. Lấy thông tin BasicAuth và kiểm tra số lần sai của user cụ thể
 			username, _, ok := r.BasicAuth()
 			if ok {
 				mu.Lock()
@@ -104,10 +153,12 @@ func main() {
 				mu.Unlock()
 
 				if count >= maxFailedAttempts {
+					log.Printf("[BLOCK - User] Chặn đăng nhập vào tài khoản '%s' từ IP %s do sai mật khẩu quá %d lần", username, getRealIP(r), maxFailedAttempts)
 					w.WriteHeader(http.StatusTooManyRequests)
 					return
 				}
 
+				// Lưu username vào context để dùng cho hàm ModifyResponse
 				ctx := context.WithValue(r.Context(), usernameKey, username)
 				r = r.WithContext(ctx)
 			}
@@ -117,9 +168,15 @@ func main() {
 	})
 
 	log.Printf("Bắt đầu chạy Interceptor tại cổng :7900 -> Forward đến :7899")
-	log.Printf("Cấu hình hiện tại: Block sau %d lần sai, Reset sau %v", maxFailedAttempts, resetInterval)
+	log.Printf("Cấu hình hiện tại: Block sau %d lần sai, Giới hạn %d users trong map, Reset sau %v", maxFailedAttempts, maxTrackedUsers, resetInterval)
 
-	if err := http.ListenAndServe(":7900", nil); err != nil {
+	server := &http.Server{
+		Addr:              ":7900",
+		ReadHeaderTimeout: 5 * time.Second,
+		// Không nên set ReadTimeout, WriteTimeout quá ngắn nếu dùng WebSockets
+	}
+
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Lỗi khởi chạy server: %v", err)
 	}
 }
