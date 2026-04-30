@@ -1,0 +1,15 @@
+[Unit]
+Description=Ntfy Interceptor Reverse Proxy
+After=ntfy.service
+Wants=ntfy.service
+
+[Service]
+Type=simple
+ExecStart=/home/nduc/ntfy/ntfy-interceptor
+Environment="MAX_FAILED_ATTEMPTS=10"
+Environment="RESET_INTERVAL_MINUTES=1"
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
