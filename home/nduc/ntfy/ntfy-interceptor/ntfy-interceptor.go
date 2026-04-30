@@ -10,9 +10,9 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
-	"strings"
 )
 
 var (
@@ -21,12 +21,18 @@ var (
 	maxTrackedUsers   = 1000 // Giới hạn số lượng user lưu trong map
 )
 
+// Cấu trúc lưu trữ số lần sai và thời gian sai cuối cùng của từng user
+type attemptRecord struct {
+	count      int
+	lastUpdate time.Time
+}
+
 type contextKey string
 
 const usernameKey contextKey = "username"
 
 var (
-	failedAttempts = make(map[string]int)
+	failedAttempts = make(map[string]attemptRecord)
 	mu             sync.Mutex
 )
 
@@ -92,12 +98,23 @@ func main() {
 	// Chặn và đợi cho đến khi ntfy thật (7899) mở port. Thử lại mỗi 5 giây.
 	waitForBackend("127.0.0.1:7899", 5*time.Second)
 
-	// Sau khi backend đã sẵn sàng, khởi chạy goroutine để reset bộ đếm
+	// Goroutine dọn dẹp (Garbage Collector)
+	// Quét map theo định kỳ (bằng một nửa thời gian reset) để xóa các user đã hết hạn
 	go func() {
-		ticker := time.NewTicker(resetInterval)
+		cleanInterval := resetInterval / 2
+		if cleanInterval < 1*time.Second {
+			cleanInterval = 1 * time.Second
+		}
+		ticker := time.NewTicker(cleanInterval)
 		for range ticker.C {
 			mu.Lock()
-			failedAttempts = make(map[string]int)
+			now := time.Now()
+			for user, record := range failedAttempts {
+				// Nếu đã qua `resetInterval` kể từ lần sai cuối cùng -> xóa khỏi map
+				if now.Sub(record.lastUpdate) > resetInterval {
+					delete(failedAttempts, user)
+				}
+			}
 			mu.Unlock()
 		}
 	}()
@@ -118,9 +135,19 @@ func main() {
 			if cleanedPath == "/v1/account/token" {
 				if username, ok := req.Context().Value(usernameKey).(string); ok {
 					mu.Lock()
-					failedAttempts[username]++
+					record := failedAttempts[username]
+
+					// Nếu user có trong map nhưng đã quá thời gian reset -> đếm lại từ đầu
+					if time.Since(record.lastUpdate) > resetInterval {
+						record.count = 0
+					}
+
+					record.count++
+					record.lastUpdate = time.Now()
+					failedAttempts[username] = record
+
 					log.Printf("[Cảnh báo] Sai mật khẩu tài khoản '%s' - Số lần thử: %d/%d (IP: %s)",
-						username, failedAttempts[username], maxFailedAttempts, getRealIP(req))
+						username, record.count, maxFailedAttempts, getRealIP(req))
 					mu.Unlock()
 				}
 			}
@@ -133,23 +160,29 @@ func main() {
 		cleanedPath := path.Clean(r.URL.Path)
 
 		if cleanedPath == "/v1/account/token" {
-			// 1. Kiểm tra tổng số lượng user đang bị theo dõi trong map
-			mu.Lock()
-			totalTracked := len(failedAttempts)
-			mu.Unlock()
-
-			if totalTracked >= maxTrackedUsers {
-				// Nếu map đã đầy, chặn toàn bộ request đến endpoint này để chống cạn kiệt tài nguyên bộ nhớ
-				log.Printf("[BLOCK - Global] Chặn request từ IP %s do bộ nhớ đã đạt tối đa %d users theo dõi", getRealIP(r), maxTrackedUsers)
-				w.WriteHeader(http.StatusTooManyRequests)
-				return
-			}
-
-			// 2. Lấy thông tin BasicAuth và kiểm tra số lần sai của user cụ thể
 			username, _, ok := r.BasicAuth()
 			if ok {
 				mu.Lock()
-				count := failedAttempts[username]
+				record, userTracked := failedAttempts[username]
+
+				// Dọn dẹp lười (Lazy cleanup) ngay lúc truy cập nếu user đó đã hết hạn
+				if userTracked && time.Since(record.lastUpdate) > resetInterval {
+					delete(failedAttempts, username)
+					userTracked = false
+					record = attemptRecord{}
+				}
+
+				totalTracked := len(failedAttempts)
+
+				// Chỉ chặn nếu map đã đầy VÀ user này chưa hề có trong map (user mới)
+				if !userTracked && totalTracked >= maxTrackedUsers {
+					mu.Unlock()
+					log.Printf("[BLOCK - Global] Chặn request từ IP %s do bộ nhớ đã đạt tối đa %d users theo dõi", getRealIP(r), maxTrackedUsers)
+					w.WriteHeader(http.StatusTooManyRequests)
+					return
+				}
+
+				count := record.count
 				mu.Unlock()
 
 				if count >= maxFailedAttempts {
