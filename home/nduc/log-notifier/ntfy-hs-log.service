@@ -1,0 +1,8 @@
+[Unit]
+Description=Check user journalctl logs and notify via ntfy
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/home/nduc/log-notifier/ntfy-hs-log.env
+ExecStart=/home/nduc/log-notifier/ntfy-hs-log.sh
