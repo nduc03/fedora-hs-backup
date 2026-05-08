@@ -101,10 +101,7 @@ func main() {
 	// Goroutine dọn dẹp (Garbage Collector)
 	// Quét map theo định kỳ (bằng một nửa thời gian reset) để xóa các user đã hết hạn
 	go func() {
-		cleanInterval := resetInterval / 2
-		if cleanInterval < 1*time.Second {
-			cleanInterval = 1 * time.Second
-		}
+		cleanInterval := max(resetInterval/2, 1*time.Second)
 		ticker := time.NewTicker(cleanInterval)
 		for range ticker.C {
 			mu.Lock()

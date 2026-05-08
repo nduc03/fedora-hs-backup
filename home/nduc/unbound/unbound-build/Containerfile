@@ -1,0 +1,55 @@
+FROM alpine:3.20 AS builder
+
+RUN apk add --no-cache \
+    build-base \
+    openssl-dev \
+    openssl-libs-static \
+    expat-dev \
+    expat-static \
+    zlib-static \
+    bison \
+    flex \
+    wget \
+    ca-certificates \
+    tar \
+    file
+
+WORKDIR /src
+
+RUN wget https://nlnetlabs.nl/downloads/unbound/unbound-latest.tar.gz \
+    && tar xzf unbound-latest.tar.gz --strip-components=1
+
+RUN ./configure \
+    # --prefix=/ \
+    --enable-static \
+    --disable-shared \
+    --with-pthreads \
+    --with-ssl=/usr \
+    --with-libexpat=/usr \
+    --disable-flto \
+    LDFLAGS="-static -no-pie" \
+    CFLAGS="-O2 -march=x86-64-v2 -mtune=ivybridge -pipe"
+
+RUN make LDFLAGS="-static -all-static -no-pie" \
+         LIBS="-lssl -lcrypto -lexpat -lz -lpthread" \
+         -j$(nproc)
+
+RUN make install \
+    && strip /usr/local/sbin/unbound \
+    && strip /usr/local/sbin/unbound-checkconf
+
+FROM gcr.io/distroless/static-debian13
+
+COPY --from=builder /usr/local/sbin/unbound /unbound
+COPY --from=builder /usr/local/sbin/unbound-checkconf /unbound-checkconf
+
+COPY unbound.conf /etc/unbound/unbound.conf
+
+EXPOSE 53/udp
+EXPOSE 53/tcp
+EXPOSE 443/tcp
+EXPOSE 853/tcp
+
+ENTRYPOINT ["/unbound"]
+
+CMD ["-d", "-c", "/etc/unbound/unbound.conf"]

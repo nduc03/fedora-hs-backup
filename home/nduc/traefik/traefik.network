@@ -1,2 +1,4 @@
 [Network]
 NetworkName=traefik
+Gateway=198.18.0.1
+Subnet=198.18.0.0/16

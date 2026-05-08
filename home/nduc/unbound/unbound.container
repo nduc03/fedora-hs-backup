@@ -1,0 +1,15 @@
+[Unit]
+Description=Unbound DNS resolver
+
+[Container]
+Image=forgejo.hs.lan/nduc/unbound:latest
+ContainerName=unbound
+Network=traefik
+IP=198.18.8.8
+
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

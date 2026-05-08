@@ -16,6 +16,12 @@ PublishPort=853:853/tcp
 PublishPort=853:853/udp
 %EXTRA_PORT_PLACEHOLDER%
 
+Network=traefik.network
+Label=traefik.enable=true
+Label=traefik.http.routers.dns.rule=Host(`dns.lan`)
+Label=traefik.http.routers.dns.service=dns-svc
+Label=traefik.http.services.dns-svc.loadbalancer.server.port=80
+
 [Service]
 Restart=always
 CPUWeight=300
