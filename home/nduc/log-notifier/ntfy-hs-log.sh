@@ -31,6 +31,7 @@ if [ -n "$LOG_DATA" ]; then
       --url "$NTFY_URL" \
       --header "Authorization: $NTFY_AUTH" \
       --header "X-Title: hs Error Log" \
+      --header "X-Priority: 2" \
       --data-binary @-
 fi
 

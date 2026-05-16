@@ -6,10 +6,13 @@ Image=forgejo.hs.lan/nduc/unbound:latest
 ContainerName=unbound
 Network=traefik
 IP=198.18.8.8
+Volume=/etc/localtime:/etc/localtime:ro
+Volume=/home/nduc/container-data/unbound/conf:/etc/unbound:Z,ro
 
 
 [Service]
 Restart=always
+CPUWeight=300
 
 [Install]
 WantedBy=default.target

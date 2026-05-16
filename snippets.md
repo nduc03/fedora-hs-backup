@@ -17,6 +17,7 @@ sync-service() {
     rsync -av --no-times --no-owner --no-group \
         --chmod=D755,F644 \
         --exclude='*.sh' \
+        --exclude='*.env' \
         -e "ssh" \
         ./ "${target_user}@${target_host}:${remote_path}/" \
         "$@"
@@ -25,6 +26,12 @@ sync-service() {
         --chmod=755 \
         -e "ssh" \
         ./*.sh "${target_user}@${target_host}:${remote_path}/" \
+        "$@"
+
+    rsync -av --no-times --no-owner --no-group \
+        --chmod=600 \
+        -e "ssh" \
+        ./*.env "${target_user}@${target_host}:${remote_path}/" \
         "$@"
 }
 ```

@@ -1,18 +1,18 @@
-FROM alpine:3.20 AS builder
+FROM alpine:latest AS builder
 
 RUN apk add --no-cache \
     build-base \
     openssl-dev \
     openssl-libs-static \
     expat-dev \
+    hiredis-dev \
     expat-static \
     zlib-static \
     bison \
     flex \
     wget \
     ca-certificates \
-    tar \
-    file
+    tar
 
 WORKDIR /src
 
@@ -20,7 +20,8 @@ RUN wget https://nlnetlabs.nl/downloads/unbound/unbound-latest.tar.gz \
     && tar xzf unbound-latest.tar.gz --strip-components=1
 
 RUN ./configure \
-    # --prefix=/ \
+    --enable-cachedb \
+    --with-libhiredis \
     --enable-static \
     --disable-shared \
     --with-pthreads \
@@ -31,8 +32,20 @@ RUN ./configure \
     CFLAGS="-O2 -march=x86-64-v2 -mtune=ivybridge -pipe"
 
 RUN make LDFLAGS="-static -all-static -no-pie" \
-         LIBS="-lssl -lcrypto -lexpat -lz -lpthread" \
+         LIBS="-lhiredis -lssl -lcrypto -lexpat -lz -lpthread" \
          -j$(nproc)
+
+# Verify that the unbound binary is statically linked
+RUN ldd unbound 2>&1 | grep -q "Not a valid dynamic program" \
+    || { echo "ERROR: ldd check error or unbound binary is not statically linked after build!"; exit 1; }
+
+RUN ldd unbound-checkconf 2>&1 | grep -q "Not a valid dynamic program" \
+    || { echo "ERROR: ldd check error or unbound-checkconf binary is not statically linked after build!"; exit 1; }
+
+# Verify that the unbound binary has cachedb module
+RUN ./unbound -V | grep -q "cachedb" \
+    || { echo "ERROR: cachedb module not found in unbound binary!"; exit 1; }
+
 
 RUN make install \
     && strip /usr/local/sbin/unbound \
