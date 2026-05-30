@@ -54,19 +54,27 @@ pre_install() {
   echo "running this script multiple times will complicate the container data permissions."
   echo "therefore, to prevent the script from failing, the script will use sudo."
 
+  shopt -s dotglob
+  
   rm -f "$SCRIPT_DIR/mycert/.gitignore" || true
   rm -f "$SCRIPT_DIR/secrets/.gitignore" || true
   mv "$SCRIPT_DIR/secrets/ctv.env" "$SCRIPT_DIR/ctv.env.bak" || true
 
   sudo mv "$SCRIPT_DIR/mycerts/"  "$SERVICE_DATA_DIR/mycerts" || true
-  sudo mv "$SCRIPT_DIR/dynamic/"  "$SERVICE_DATA_DIR/dynamic" || true
+  sudo mv "$SCRIPT_DIR/dynamic/"* "$SERVICE_DATA_DIR/dynamic/" || true
   mkdir -p "$SERVICE_DATA_DIR/etc/traefik" || true
   sudo mv "$SCRIPT_DIR/etc/traefik/traefik.yml"  "$SERVICE_DATA_DIR/etc/traefik/traefik.yml" || true
-  sudo mv "$SCRIPT_DIR/secrets/" "$SERVICE_DATA_DIR/secrets" || true
+  # sudo mv "$SCRIPT_DIR/secrets/" "$SERVICE_DATA_DIR/secrets" || true
 
   echo ">>> Setting ownership for $SERVICE_DATA_DIR..."
   sudo chown -R 1000:1000 "$SERVICE_DATA_DIR"
   podman unshare chown -R 1000:1000 "$SERVICE_DATA_DIR"
+
+  local acme_json="$SERVICE_DATA_DIR/etc/traefik/acme.json"
+
+  [ -e "$acme_json" ] || { podman unshare touch "$acme_json" && podman unshare chmod 600 "$acme_json"; }
+
+  shopt -u dotglob
 }
 
 post_install() {
@@ -84,6 +92,15 @@ post_install() {
 
   echo "Traefik may fail to start at the first installation because SELinux block Traefik accessing podman socket."
   echo "If error happen, this is expected, not to worry."
+
+  read -p "Do you want to fix this issue now? (Y/n) " -n 1 -r
+  echo ""
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "You can fix this issue later by running this script again and choose to fix the issue when prompted."
+    echo "Or you can manually configure SELinux policy."
+    return
+  fi
+
   echo "The script will automatically fix this issue by configuring SELinux policy and restart the service."
 
   echo "Waiting 10 seconds for $SERVICE_NAME to start and running into SELinux permission denied..."
