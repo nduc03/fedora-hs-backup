@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 
-# This is Quadlet Container Service Installer Template, to use this template:
-# 1. Copy this file into the container project folder.
+# This is Quadlet Service Installer Template, to use this template:
+# 1. Copy this file into the service folder.
 # 2. Rename it `mv install.sh.template install.sh` and make it executable `chmod +x install.sh`.
 # 3. Customize this script as needed; recommended customization points are marked with '#*'.
 
 set -e
 
-#* ==========================================
+#* =========================================
 #* 1. CUSTOMIZABLE VARIABLES
-#* ==========================================
+#* =========================================
 
 #* Set to false if this container can not run rootless
 ROOTLESS=true
@@ -21,12 +21,33 @@ USE_TEMPLATE=true
 #* or "quadlets" to specify multiple quadlets in one file (only podman v6 above)
 FILE_TYPE="container"
 
+#* Set to true if you want to use traefik service discovery
+#* Automatically injects Traefik labels directly under [Container] section.
+#* It utilizes $PRIVATE_DOMAIN (e.g., from ~/hs-info.env) for routing.
+USE_TRAEFIK_LABELS=false
+
+#* Set to true to route the service via PUBLIC_DOMAIN if you want to leverage the powaaahh 💪 of Let's Encrypt!
+#* Note: This does NOT necessarily expose your service to the internet. It simply provides a valid SSL cert
+#* so you don't have to manually install root certificates on every device across your LAN.
+ENABLE_PUBLIC_DOMAIN=false
+
+#* If your service has mount points, you can specify the directory names here
+#* It will automatically create these directories in the service data directory and adjust permissions
+#* example definition: MOUNT_DIR_NAMES=("data" "config" "logs")
+MOUNT_DIR_NAMES=()
+
+#* If you have extra files that need variable substitution (e.g., config files, networks),
+#* list them here with full path from the script directory.
+#* The script will process them with envsubst and output without the '.template' extension.
+#* Example: EXTRA_TEMPLATE_FILES=("etc/something/config.yml.template" "app-settings.conf.template")
+EXTRA_TEMPLATE_FILES=("etc/traefik/traefik.yml.template" "dynamic/external_services.yml.template")
+
 #* Add more customizable variables here if needed, for example:
 #* MY_CUSTOM_LOG="/path/to/custom.log"
 
-#* ==========================================
+#* =========================================
 #* 2. CUSTOMIZABLE HOOKS (PRE/POST INSTALL)
-#* ==========================================
+#* =========================================
 #* Các tham số khả dụng trong hàm:
 #* $1: SCRIPT_DIR       - Đường dẫn thư mục chứa script này
 #* $2: SCRIPT_DIR_NAME  - Tên thư mục cha chứa script này
@@ -55,7 +76,7 @@ pre_install() {
   echo "therefore, to prevent the script from failing, the script will use sudo."
 
   shopt -s dotglob
-  
+
   rm -f "$SCRIPT_DIR/mycert/.gitignore" || true
   rm -f "$SCRIPT_DIR/secrets/.gitignore" || true
   mv "$SCRIPT_DIR/secrets/ctv.env" "$SCRIPT_DIR/ctv.env.bak" || true
@@ -75,6 +96,7 @@ pre_install() {
   [ -e "$acme_json" ] || { podman unshare touch "$acme_json" && podman unshare chmod 600 "$acme_json"; }
 
   shopt -u dotglob
+
 }
 
 post_install() {
@@ -90,45 +112,32 @@ post_install() {
 
   echo ">>> Running post-install hooks for: $SERVICE_NAME"
 
-  echo "Traefik may fail to start at the first installation because SELinux block Traefik accessing podman socket."
-  echo "If error happen, this is expected, not to worry."
-
-  read -p "Do you want to fix this issue now? (Y/n) " -n 1 -r
-  echo ""
-  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "You can fix this issue later by running this script again and choose to fix the issue when prompted."
-    echo "Or you can manually configure SELinux policy."
-    return
-  fi
-
-  echo "The script will automatically fix this issue by configuring SELinux policy and restart the service."
-
-  echo "Waiting 10 seconds for $SERVICE_NAME to start and running into SELinux permission denied..."
-
-  sleep 10
+  echo ">>> Restoring SELinux context for $SERVICE_DATA_DIR..."
+  restorecon -R "$SERVICE_DATA_DIR"
 
   echo ">>> Configuring SELinux policy to access podman socket..."
-  sudo ausearch -c 'traefik' --raw | sudo audit2allow -M my-traefik
-  sudo semodule -X 300 -i my-traefik.pp
+  checkmodule -M -m -o my-traefik.mod my-traefik.te
+  sudo semodule_package -o my-traefik.pp -m my-traefik.mod
+  sudo semodule -i my-traefik.pp
+
+  rm -f my-traefik.mod my-traefik.pp
 
   echo ">>> Restarting $SERVICE_NAME..."
 
   $SYSTEMCTL_CMD restart "$SERVICE_NAME"
+
 }
 
 #* =========================================
-#* 3. CUSTOMIZABLE TEMPLATE VARIABLES
+#* 3. CONTAINER TEMPLATE VARIABLES
 #* =========================================
-#* declare an associative array to hold custom template variables and their values
-#* which are about to be injected into the template
-declare -A CTV
-#* --- VÍ DỤ CẤU HÌNH ---
-#* Nếu trong file .template có thông tin như: "Environment=DB_PASSWORD=%pass%"
-#* Hãy khai báo như bên dưới:
-#* CTV["%pass%"]="mysecretpassword"
-#* CTV["%app_port%"]="8080"
-#* -----------------------------------------
-
+#* Mọi biến được khai báo ở các file `ctv.env` trong thư mục này,
+#* HOẶC từ file global `~/hs-info.env`, sẽ tự động được thay thế vào file template.
+#*
+#* TRONG FILE `.template`: Sử dụng cú pháp $VAR_NAME hoặc ${VAR_NAME}
+#* Ví dụ: Environment=DB_PASSWORD=${DB_PASSWORD}
+#* #* Các biến nội bộ có sẵn để gọi trong template:
+#* $SERVICE_DIR, $SERVICE_DATA_DIR, $HOST_IPV4, $HOST_ULA_IPV6, và các biến ở trong ~/hs-info.env
 
 # ==========================================
 # 4. VARIABLE CALCULATION LOGIC
@@ -136,6 +145,20 @@ declare -A CTV
 
 # Determine the script's absolute directory
 SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
+
+# Thiết lập thư mục Debug
+DEBUG_OUT_DIR="$SCRIPT_DIR/__dbg_template__"
+DEBUG_MODE=false
+for arg in "$@"; do
+  if [[ "$arg" == "--dbg-templ" ]]; then
+    DEBUG_MODE=true
+    echo ">>> [DEBUG MODE] Enabled. Skipping installation steps."
+    # Khởi tạo an toàn thư mục và file .gitignore ngay từ đầu
+    mkdir -p "$DEBUG_OUT_DIR"
+    echo "*" > "$DEBUG_OUT_DIR/.gitignore"
+    break
+  fi
+done
 
 # get script directory name which will be used as service name
 SCRIPT_DIR_NAME="$(basename "$SCRIPT_DIR")"
@@ -153,9 +176,9 @@ SERVICE_NAME=$(printf '%s\n' "$SCRIPT_DIR_NAME" | awk '{
 }')
 
 #?? want to custom data directory?
-#** recommended way is redefine in pre_install hook
+#** recommended way is redefine it in pre_install hook
 #!! directly change this is not recommended, as it may cause issues with future updates of the script
-SERVICE_DATA_DIR="$HOME/container-data/$SERVICE_NAME"
+SERVICE_DATA_DIR="${SERVICE_DATA_DIR:-$HOME/container-data/$SERVICE_NAME}"
 
 # get host's default ipv4 address
 __default_iface=$(ip route | grep default | head -n1 | awk '{print $5}')
@@ -166,7 +189,6 @@ HOST_ULA_IPV6=${HOST_ULA_IPV6:-::1}
 
 # define quadlet file paths
 QUADLET_FILENAME="$SERVICE_NAME.$FILE_TYPE"
-QUADLET_FILE_LOCATION="$SCRIPT_DIR/$QUADLET_FILENAME"
 
 if [[ "$ROOTLESS" = "true" ]]; then
   INSTALL_LOCATION="$HOME/.config/containers/systemd/"
@@ -180,95 +202,69 @@ fi
 
 # make a temporary directory for temporary target file or backup old quadlets file
 TMP_DIR=$(mktemp -d -t "$SERVICE_NAME-XXXXXXXX")
-trap "rm -rf $TMP_DIR; unset SEARCH_KEY REPLACE_VAL" EXIT
-QUADLET_FILE_LOCATION="$TMP_DIR/$QUADLET_FILENAME"
+trap "rm -rf $TMP_DIR" EXIT
+
+# Đổi đường dẫn file xuất ra nếu bật cờ DEBUG
+if [[ "$DEBUG_MODE" == "true" ]]; then
+  QUADLET_FILE_LOCATION="$DEBUG_OUT_DIR/$QUADLET_FILENAME"
+else
+  QUADLET_FILE_LOCATION="$TMP_DIR/$QUADLET_FILENAME"
+fi
 
 BACKUP_DIR="$TMP_DIR/backup"
-
-TRAEFIK_LABELS=$(cat << EOF
-Label=host.subdomain=$SERVICE_NAME
-Label=traefik.http.routers.$SERVICE_NAME.entrypoints=websecure
-Label=traefik.http.routers.$SERVICE_NAME.service=api@internal
-Label=traefik.http.routers.$SERVICE_NAME.tls=true
-Label=traefik.http.services.$SERVICE_NAME.loadbalancer.server.url=http://host.container.internal:$HTTP_PORT
-EOF
-)
 
 HOOK_ARGS=("$SCRIPT_DIR" "$SCRIPT_DIR_NAME" "$SERVICE_NAME"
       "$SERVICE_DATA_DIR" "$HOST_IPV4" "$HOST_ULA_IPV6"
       "$SUDO" "$INSTALL_LOCATION" "$SYSTEMCTL_CMD")
 
 # ==========================================
-# 5. AUTOMATIC TEMPLATE VARIABLES
+# 5. EXECUTION & TEMPLATE PROCESSING
 # ==========================================
+make_mount_dir() {
+    echo ">>> Creating mount directories and adjusting permissions if necessary..."
 
-echo ">>> Auto-detecting ctv.env files for template injection..."
+    for DIR_NAME in "$@"; do
+        local TARGET="$SERVICE_DATA_DIR/$DIR_NAME"
+        echo "--- Đang xử lý mount point: $TARGET ---"
 
-# Tìm tất cả các file ctv.env và duyệt qua từng file một
-while IFS= read -r __ctv_env_path; do
-  if [[ -f "$__ctv_env_path" ]]; then
-    echo ">>> Found ctv.env at: $__ctv_env_path"
-    echo ">>> Sourcing environment variables from this file..."
-    source "$__ctv_env_path"
-
-    echo ">>> Auto-mapping variables from $(basename "$__ctv_env_path") to CTV array..."
-    # Đọc từng dòng trong file ctv.env để tự động map
-    while IFS= read -r line || [[ -n "$line" ]]; do
-      # Bỏ qua các dòng trống hoặc dòng comment (#)
-      if [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]]; then
-        continue
-      fi
-
-      # 1. Tách Key và Value trực tiếp từ chuỗi (không dùng awk để tránh rườm rà)
-      line_clean="${line#export }"     # Loại bỏ chữ 'export ' nếu có
-      var_name="${line_clean%%=*}"     # Lấy tên biến (trước dấu = đầu tiên)
-      raw_value="${line_clean#*=}"     # Lấy giá trị gốc (sau dấu = đầu tiên)
-
-      # 2. Xóa dấu nháy đơn hoặc nháy kép bao quanh giá trị (nếu user có bọc)
-      if [[ "$raw_value" =~ ^\".*\"$ ]] || [[ "$raw_value" =~ ^\'.*\'$ ]]; then
-        raw_value="${raw_value:1:-1}"
-      fi
-
-      # Kiểm tra xem tên biến có hợp lệ theo chuẩn Bash không (tránh lỗi indirection)
-      if [[ "$var_name" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-        # 1. Chuyển tên biến thành chữ thường: ${var_name,,}
-        # 2. Bọc trong dấu %: placeholder
-        placeholder="%${var_name,,}%"
-
-        # Cảnh báo nếu biến đã được map trước đó từ một file ctv.env khác và yêu cầu xác nhận
-        if [[ -v CTV["$placeholder"] ]]; then
-          echo ""
-          echo "    [WARNING] Variable '$var_name' is defined multiple times!"
-          echo "              This causes confusion in predicting which value is ultimately selected."
-          echo "              It can lead to instability, where different installations"
-          echo "              might produce unpredictable or unintended results."
-          echo "              Please consolidate your variables to avoid unexpected behaviors."
-
-          read -p "    Do you want to overwrite the value of $var_name and continue? (y/N) " -n 1 -r
-          echo ""
-
-          if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            echo "    [ABORT] Installation aborted by user due to variable conflict."
-            exit 1
-          fi
-        else
-          echo ">>> Found a valid variable $var_name."
+        # 1. Tạo thư mục nếu chưa tồn tại
+        if [ ! -d "$TARGET" ]; then
+            echo ">> Thư mục chưa tồn tại, đang tạo: mkdir -p $TARGET"
+            mkdir -p "$TARGET"
         fi
 
-        # 3. gán giá trị thực tế của biến vào mảng CTV với key là placeholder
-        CTV["$placeholder"]="$raw_value"
+        if [ "$ROOTLESS" = "false" ]; then
+            echo ">> Chế độ Rootfull (ROOTLESS=false): Bỏ qua bước sửa quyền sở hữu."
+            echo ""
+            continue
+        fi
 
-        echo "    [Auto-mapped] $var_name -> $placeholder"
-      else
-        echo "    [Warning] Skipping invalid variable name '$var_name' in ctv.env"
-      fi
-    done < "$__ctv_env_path"
-  fi
-done < <(find "$SCRIPT_DIR" -name "ctv.env")
+        # 2. Lấy thông tin UID
+        local HOST_UID=$(stat -c "%u" "$TARGET")
+        local UNSHARE_UID=$(podman unshare stat -c "%u" "$TARGET")
 
-# ==========================================
-# 6. EXECUTION
-# ==========================================
+        echo "   UID hiện tại (Host): $HOST_UID | (Unshare): $UNSHARE_UID"
+
+        # 3. Logic xử lý quyền
+        if [ "$UNSHARE_UID" = "1000" ]; then
+            echo ">> Mount point đã thuộc quyền quản lý của Podman. Bỏ qua."
+
+        elif [ "$HOST_UID" = "1000" ]; then
+            echo ">> Mount point đang là UID 1000. Đang chạy podman unshare chown..."
+            podman unshare chown -R 1000:1000 "$TARGET"
+            echo ">> Xong!"
+
+        else
+            echo ">> Mount point đang thuộc UID khác ($HOST_UID). Đang dùng sudo để reset về 1000..."
+            sudo chown -R 1000:1000 "$TARGET"
+            echo ">> Tiếp tục chuyển sang Podman unshare..."
+            podman unshare chown -R 1000:1000 "$TARGET"
+            echo ">> Hoàn tất!"
+        fi
+        echo ""
+    done
+}
+
 echo ">>> Validating execution environment..."
 
 if [[ "$EUID" -eq 0 ]]; then
@@ -290,74 +286,151 @@ mkdir -p "$BACKUP_DIR"
 if [[ "$USE_TEMPLATE" = "true" ]]; then
   TEMPLATE_FILENAME="$QUADLET_FILENAME.template"
 
-  # Ensure template exists
+  # Ensure primary template exists
   if [[ ! -f "$SCRIPT_DIR/$TEMPLATE_FILENAME" ]]; then
     echo "Error: $TEMPLATE_FILENAME not found in $SCRIPT_DIR."
     exit 1
   fi
 
-  # replace predefined placeholder
-  echo ">>> Injecting variables into template..."
-  sed -e "s|%service_dir%|$SCRIPT_DIR|g" \
-    -e "s|%host_ipv4%|$HOST_IPV4|g" \
-    -e "s|%host_ula_ipv6%|\[$HOST_ULA_IPV6\]|g" \
-    -e "s|%service_data_dir%|$SERVICE_DATA_DIR|g" \
-    "$SCRIPT_DIR/$TEMPLATE_FILENAME" > "$QUADLET_FILE_LOCATION"
+  echo ">>> Processing templates and safely injecting variables..."
 
- # Inject TRAEFIK_LABELS if USE_TRAEFIK_LABELS is true
-  if [[ "$USE_TRAEFIK_LABELS" == "true" ]]; then
-    export SEARCH_KEY="==%traefik_labels%=="
-    export REPLACE_VAL="$TRAEFIK_LABELS"
+  # Tạo Subshell để nạp và xử lý biến môi trường an toàn
+  (
+    export SERVICE_DIR="$SCRIPT_DIR"
+    export SERVICE_DATA_DIR="$SERVICE_DATA_DIR"
+    export HOST_IPV4="$HOST_IPV4"
+    export HOST_ULA_IPV6="[$HOST_ULA_IPV6]"
 
-    echo ">>> Processing TRAEFIK_LABELS injection..."
-    awk '
-    BEGIN { search = ENVIRON["SEARCH_KEY"]; replace = ENVIRON["REPLACE_VAL"]; len = length(search) }
-    {
-        while ( (idx = index($0, search)) > 0 ) {
-            $0 = substr($0, 1, idx - 1) replace substr($0, idx + len)
-        }
-        # Nếu người dùng không dùng Traefik (replace == ""), bỏ qua việc in dòng trống để file config sạch hơn
-        if ($0 ~ /^[[:space:]]*$/ && replace == "") next;
-        print
-    }' "$QUADLET_FILE_LOCATION" > "${QUADLET_FILE_LOCATION}.tmp" && mv "${QUADLET_FILE_LOCATION}.tmp" "$QUADLET_FILE_LOCATION"
-  fi
+    # 1. Nạp Global Env nếu có
+    if [[ -f "$HOME/hs-info.env" ]]; then
+      echo "    -> Sourcing global variables from: ~/hs-info.env"
+      set -a
+      source "$HOME/hs-info.env"
+      set +a
+    fi
 
+    # 2. Nạp Local ctv.env
+    while IFS= read -r env_file; do
+      echo "    -> Sourcing variables from: $(basename "$env_file")"
+      set -a
+      source "$env_file"
+      set +a
+    done < <(find "$SCRIPT_DIR" -name "ctv.env")
 
-  echo ">>> Injecting custom variables into template..."
-  for key in "${!CTV[@]}"; do
-    value="${CTV[$key]}"
-    echo "Injecting $key"
+# 3. Setup Traefik Labels based on env
+    if [[ "$USE_TRAEFIK_LABELS" == "true" ]]; then
+      LAN_DOMAIN="${PRIVATE_DOMAIN:-hs.lan}"
+      LE_DOMAIN="${PUBLIC_DOMAIN}"
 
-    # awk is a safer choice than sed for arbitrary replacement values, as it can handle special characters
-    export SEARCH_KEY="$key"
-    export REPLACE_VAL="$value"
+      # Khởi tạo nhãn mặc định cho mạng LAN
+      TRAEFIK_LABELS=$(cat << EOF
+Network=traefik.network
+Label=traefik.enable=true
+Label=traefik.http.routers.$SERVICE_NAME.rule=Host(\`$SERVICE_NAME.$LAN_DOMAIN\`)
+Label=traefik.http.routers.$SERVICE_NAME.entrypoints=websecure
+Label=traefik.http.routers.$SERVICE_NAME.tls=true
+EOF
+)
 
-    awk '
-    BEGIN { search = ENVIRON["SEARCH_KEY"]; replace = ENVIRON["REPLACE_VAL"]; len = length(search) }
-    {
-        while ( (idx = index($0, search)) > 0 ) {
-            $0 = substr($0, 1, idx - 1) replace substr($0, idx + len)
-        }
-        print
-    }' "$QUADLET_FILE_LOCATION" > "${QUADLET_FILE_LOCATION}.tmp" && mv "${QUADLET_FILE_LOCATION}.tmp" "$QUADLET_FILE_LOCATION"
+      # Kiểm tra nếu cờ ENABLE_PUBLIC_DOMAIN bật VÀ biến LE_DOMAIN có giá trị thì nối thêm cấu hình
+      if [[ "$ENABLE_PUBLIC_DOMAIN" == "true" && -n "$LE_DOMAIN" ]]; then
+        TRAEFIK_LABELS=$(cat << EOF
+$TRAEFIK_LABELS
+Label=traefik.http.routers.$SERVICE_NAME-le.rule=Host(\`$SERVICE_NAME.$LE_DOMAIN\`)
+Label=traefik.http.routers.$SERVICE_NAME-le.entrypoints=websecure
+Label=traefik.http.routers.$SERVICE_NAME-le.tls.certresolver=leresolver
+EOF
+)
+      fi
+    fi
+
+    # Lấy danh sách các biến CÓ THỰC để envsubst không xóa nhầm các biến systemd native
+    VARS_TO_REPLACE=$(compgen -e | awk '{print "${"$1"}"}' | tr '\n' ' ')
+
+    # 4. Render file template chính
+    envsubst "$VARS_TO_REPLACE" < "$SCRIPT_DIR/$TEMPLATE_FILENAME" > "$QUADLET_FILE_LOCATION"
+
+    # 5. Render các file template phụ (EXTRA_TEMPLATE_FILES)
+    if [[ ${#EXTRA_TEMPLATE_FILES[@]} -gt 0 ]]; then
+      for ext_tpl in "${EXTRA_TEMPLATE_FILES[@]}"; do
+        if [[ -f "$SCRIPT_DIR/$ext_tpl" ]]; then
+          echo "    -> Injecting variables into extra template: $ext_tpl"
+          out_file="${ext_tpl%.template}" # Xóa đuôi .template cho file đầu ra
+
+          # Đổi đường dẫn target nếu đang bật chế độ debug
+          if [[ "$DEBUG_MODE" == "true" ]]; then
+            target_file="$DEBUG_OUT_DIR/$out_file"
+          else
+            target_file="$SCRIPT_DIR/$out_file"
+          fi
+
+          mkdir -p "$(dirname "$target_file")"
+
+          envsubst "$VARS_TO_REPLACE" < "$SCRIPT_DIR/$ext_tpl" > "$target_file"
+        else
+          echo "    -> [WARNING] Extra template file not found: $ext_tpl"
+        fi
+      done
+    fi
+
+    # 6. Auto-inject Traefik Labels (nếu bật)
+    if [[ "$USE_TRAEFIK_LABELS" == "true" ]]; then
+      echo "    -> Auto-injecting Traefik labels under [Container] section..."
+      awk -v labels="$TRAEFIK_LABELS" '
+      /^\[Container\]/ {
+          print $0
+          print labels
+          next
+      }
+      { print }
+      ' "$QUADLET_FILE_LOCATION" > "${QUADLET_FILE_LOCATION}.tmp" && mv "${QUADLET_FILE_LOCATION}.tmp" "$QUADLET_FILE_LOCATION"
+    fi
+  )
+
+  # Validate if ANY of the resulting files have unreplaced placeholders
+  echo ">>> Validating unreplaced placeholders..."
+  FILES_TO_CHECK=("$QUADLET_FILE_LOCATION")
+  for ext_tpl in "${EXTRA_TEMPLATE_FILES[@]}"; do
+    out_file="${ext_tpl%.template}"
+    if [[ "$DEBUG_MODE" == "true" ]]; then
+      test_path="$DEBUG_OUT_DIR/$out_file"
+    else
+      test_path="$SCRIPT_DIR/$out_file"
+    fi
+    if [[ -f "$test_path" ]]; then
+      FILES_TO_CHECK+=("$test_path")
+    fi
   done
 
+  # Tìm kiếm các placeholder còn sót lại trong tất cả các file đã xử lý,
+  # và loại bỏ các string hash mật khẩu phổ biến để giảm false positive
+  remaining_placeholders=$(cat "${FILES_TO_CHECK[@]}" 2>/dev/null | \
+      sed -E 's/\$(1|2[abxy]|apr1|argon2[a-z]+|5|6)\$[a-zA-Z0-9./$=+,-]+//g' | \
+      grep -oP '\$\{[a-zA-Z_][a-zA-Z0-9_]*\}|\$[a-zA-Z_][a-zA-Z0-9_]*' | \
+      sort -u | xargs)
+
+  if [[ -n "$remaining_placeholders" ]]; then
+      echo ""
+      echo "[WARNING] The following variables were NOT replaced in the output files:"
+      echo "    $remaining_placeholders"
+      echo ""
+      echo "    Note: Remaining placeholders check may have false positives if your templates include string that have character \`$\` such as password hashes."
+      echo "    You can ignore this warning and enter 'n' if you are sure all variables were replaced correctly."
+      read -p "Do you want to keep these variables as-is and continue? (y/N) " -n 1 -r
+      echo ""
+      if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Installation aborted."
+        exit 1
+      fi
+  fi
 fi
 
-# validate if the resulting file has any unreplaced placeholders
-echo ">>> Validating unreplaced placeholders..."
-remaining_placeholders=$(grep -oP '%[a-zA-Z0-9_]+%' "$QUADLET_FILE_LOCATION" | sort -u | xargs)
-
-if [[ -n "$remaining_placeholders" ]]; then
-    echo ""
-    echo "[WARNING] The following placeholders were not replaced:"
-    echo "    $remaining_placeholders"
-    read -p "Do you want to keep these placeholders unreplaced? (y/N) " -n 1 -r
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-      echo "Installation aborted."
-      exit 1
-    fi
+# Ngừng script sớm nếu đang bật chế độ debug
+if [[ "$DEBUG_MODE" == "true" ]]; then
+  echo ""
+  echo ">>> [DEBUG MODE] All templates generated successfully in: $DEBUG_OUT_DIR"
+  echo ">>> [DEBUG MODE] Exiting script safely..."
+  exit 0
 fi
 
 # ensure install location exists
@@ -365,6 +438,8 @@ $SUDO mkdir -p "$INSTALL_LOCATION"
 
 # ensure service data directory exists
 mkdir -p "$SERVICE_DATA_DIR"
+
+make_mount_dir "${MOUNT_DIR_NAMES[@]}"
 
 pre_install "${HOOK_ARGS[@]}"
 
@@ -418,25 +493,6 @@ done
 
 # quyết định restart dựa trên cấu hình có thay đổi hay không
 if [[ "$SERVICE_CHANGED" == "true" ]]; then
-  echo ">>> Fixing ownership of $SERVICE_DATA_DIR for rootless podman..."
-  if ! podman unshare chown -R 1000:1000 "$SERVICE_DATA_DIR" 2>/tmp/_chown_err; then
-      if grep -qi "permission denied" /tmp/_chown_err; then
-          echo ">>> Permission denied, retrying with sudo..."
-          if ! sudo chown -R 1000:1000 "$SERVICE_DATA_DIR" 2>/tmp/_chown_err; then
-              echo "ERROR: sudo chown failed: $(cat /tmp/_chown_err)" >&2
-              exit 1
-          fi
-          if ! podman unshare chown -R 1000:1000 "$SERVICE_DATA_DIR" 2>/tmp/_chown_err; then
-              echo "ERROR: podman unshare chown failed after sudo: $(cat /tmp/_chown_err)" >&2
-              exit 1
-          fi
-      else
-          echo "ERROR: podman unshare chown failed: $(cat /tmp/_chown_err)" >&2
-          exit 1
-      fi
-  fi
-  echo ">>> Ownership fixed successfully."
-
   echo ">>> Changes applied. Reloading systemd daemon..."
   $SYSTEMCTL_CMD daemon-reload
 

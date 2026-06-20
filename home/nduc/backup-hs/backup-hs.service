@@ -1,0 +1,9 @@
+[Unit]
+Description=Chạy script backup dữ liệu lên Google Drive
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=nduc
+ExecStart=/home/nduc/backup-hs/backup.sh

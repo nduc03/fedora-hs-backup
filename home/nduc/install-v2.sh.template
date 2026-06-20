@@ -26,7 +26,7 @@ FILE_TYPE="container"
 #* It utilizes $PRIVATE_DOMAIN (e.g., from ~/hs-info.env) for routing.
 USE_TRAEFIK_LABELS=false
 
-#* Set to true to route the service via PUBLIC_DOMAIN if you want to leverage the powaaahh of Let's Encrypt!
+#* Set to true to route the service via PUBLIC_DOMAIN if you want to leverage the powaaahh 💪 of Let's Encrypt!
 #* Note: This does NOT necessarily expose your service to the internet. It simply provides a valid SSL cert
 #* so you don't have to manually install root certificates on every device across your LAN.
 ENABLE_PUBLIC_DOMAIN=false
@@ -37,12 +37,16 @@ ENABLE_PUBLIC_DOMAIN=false
 MOUNT_DIR_NAMES=()
 
 #* If you have extra files that need variable substitution (e.g., config files, networks),
-#* list them here. The script will process them with envsubst and output without the '.template' extension.
-#* Example: EXTRA_TEMPLATE_FILES=("config.yml.template" "app-settings.conf.template")
+#* list them here with full path from the script directory.
+#* The script will process them with envsubst and output without the '.template' extension.
+#* Should not include the main .container/.quadlet template file, as it's processed automatically.
+#* Example: EXTRA_TEMPLATE_FILES=("etc/something/config.yml.template" "app-settings.conf.template")
 EXTRA_TEMPLATE_FILES=()
 
 #* Add more customizable variables here if needed, for example:
 #* MY_CUSTOM_LOG="/path/to/custom.log"
+
+#* Also define any $VARIABLES that you want to be automatically replaced in the template files.
 
 #* =========================================
 #* 2. CUSTOMIZABLE HOOKS (PRE/POST INSTALL)
@@ -97,7 +101,7 @@ post_install() {
 #* TRONG FILE `.template`: Sử dụng cú pháp $VAR_NAME hoặc ${VAR_NAME}
 #* Ví dụ: Environment=DB_PASSWORD=${DB_PASSWORD}
 #* #* Các biến nội bộ có sẵn để gọi trong template:
-#* $SERVICE_DIR, $SERVICE_DATA_DIR, $HOST_IPV4, $HOST_ULA_IPV6
+#* $SERVICE_DIR, $SERVICE_DATA_DIR, $HOST_IPV4, $HOST_ULA_IPV6, và các biến ở trong ~/hs-info.env
 
 # ==========================================
 # 4. VARIABLE CALCULATION LOGIC
@@ -105,6 +109,20 @@ post_install() {
 
 # Determine the script's absolute directory
 SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
+
+# Thiết lập thư mục Debug
+DEBUG_OUT_DIR="$SCRIPT_DIR/__dbg_template__"
+DEBUG_MODE=false
+for arg in "$@"; do
+  if [[ "$arg" == "--dbg-templ" ]]; then
+    DEBUG_MODE=true
+    echo ">>> [DEBUG MODE] Enabled. Skipping installation steps."
+    # Khởi tạo an toàn thư mục và file .gitignore ngay từ đầu
+    mkdir -p "$DEBUG_OUT_DIR"
+    echo "*" > "$DEBUG_OUT_DIR/.gitignore"
+    break
+  fi
+done
 
 # get script directory name which will be used as service name
 SCRIPT_DIR_NAME="$(basename "$SCRIPT_DIR")"
@@ -135,7 +153,6 @@ HOST_ULA_IPV6=${HOST_ULA_IPV6:-::1}
 
 # define quadlet file paths
 QUADLET_FILENAME="$SERVICE_NAME.$FILE_TYPE"
-QUADLET_FILE_LOCATION="$SCRIPT_DIR/$QUADLET_FILENAME"
 
 if [[ "$ROOTLESS" = "true" ]]; then
   INSTALL_LOCATION="$HOME/.config/containers/systemd/"
@@ -150,7 +167,13 @@ fi
 # make a temporary directory for temporary target file or backup old quadlets file
 TMP_DIR=$(mktemp -d -t "$SERVICE_NAME-XXXXXXXX")
 trap "rm -rf $TMP_DIR" EXIT
-QUADLET_FILE_LOCATION="$TMP_DIR/$QUADLET_FILENAME"
+
+# Đổi đường dẫn file xuất ra nếu bật cờ DEBUG
+if [[ "$DEBUG_MODE" == "true" ]]; then
+  QUADLET_FILE_LOCATION="$DEBUG_OUT_DIR/$QUADLET_FILENAME"
+else
+  QUADLET_FILE_LOCATION="$TMP_DIR/$QUADLET_FILENAME"
+fi
 
 BACKUP_DIR="$TMP_DIR/backup"
 
@@ -180,7 +203,7 @@ make_mount_dir() {
             continue
         fi
 
-        # 2. Lấy thông vị UID
+        # 2. Lấy thông tin UID
         local HOST_UID=$(stat -c "%u" "$TARGET")
         local UNSHARE_UID=$(podman unshare stat -c "%u" "$TARGET")
 
@@ -258,7 +281,7 @@ if [[ "$USE_TEMPLATE" = "true" ]]; then
       set +a
     done < <(find "$SCRIPT_DIR" -name "ctv.env")
 
-# 3. Setup Traefik Labels based on env
+# 3. Setup Traefik Labels
     if [[ "$USE_TRAEFIK_LABELS" == "true" ]]; then
       LAN_DOMAIN="${PRIVATE_DOMAIN:-hs.lan}"
       LE_DOMAIN="${PUBLIC_DOMAIN}"
@@ -297,7 +320,17 @@ EOF
         if [[ -f "$SCRIPT_DIR/$ext_tpl" ]]; then
           echo "    -> Injecting variables into extra template: $ext_tpl"
           out_file="${ext_tpl%.template}" # Xóa đuôi .template cho file đầu ra
-          envsubst "$VARS_TO_REPLACE" < "$SCRIPT_DIR/$ext_tpl" > "$SCRIPT_DIR/$out_file"
+
+          # Đổi đường dẫn target nếu đang bật chế độ debug
+          if [[ "$DEBUG_MODE" == "true" ]]; then
+            target_file="$DEBUG_OUT_DIR/$out_file"
+          else
+            target_file="$SCRIPT_DIR/$out_file"
+          fi
+
+          mkdir -p "$(dirname "$target_file")"
+
+          envsubst "$VARS_TO_REPLACE" < "$SCRIPT_DIR/$ext_tpl" > "$target_file"
         else
           echo "    -> [WARNING] Extra template file not found: $ext_tpl"
         fi
@@ -322,19 +355,31 @@ EOF
   echo ">>> Validating unreplaced placeholders..."
   FILES_TO_CHECK=("$QUADLET_FILE_LOCATION")
   for ext_tpl in "${EXTRA_TEMPLATE_FILES[@]}"; do
-    out_file="$SCRIPT_DIR/${ext_tpl%.template}"
-    if [[ -f "$out_file" ]]; then
-      FILES_TO_CHECK+=("$out_file")
+    out_file="${ext_tpl%.template}"
+    if [[ "$DEBUG_MODE" == "true" ]]; then
+      test_path="$DEBUG_OUT_DIR/$out_file"
+    else
+      test_path="$SCRIPT_DIR/$out_file"
+    fi
+    if [[ -f "$test_path" ]]; then
+      FILES_TO_CHECK+=("$test_path")
     fi
   done
 
-  remaining_placeholders=$(grep -h -oP '\$\{?[a-zA-Z_][a-zA-Z0-9_]*\}?' "${FILES_TO_CHECK[@]}" 2>/dev/null | sort -u | xargs)
+  # Tìm kiếm các placeholder còn sót lại trong tất cả các file đã xử lý,
+  # và loại bỏ các string hash mật khẩu phổ biến để giảm false positive
+  remaining_placeholders=$(cat "${FILES_TO_CHECK[@]}" 2>/dev/null | \
+      sed -E 's/\$(1|2[abxy]|apr1|argon2[a-z]+|5|6)\$[a-zA-Z0-9./$=+,-]+//g' | \
+      grep -oP '\$\{[a-zA-Z_][a-zA-Z0-9_]*\}|\$[a-zA-Z_][a-zA-Z0-9_]*' | \
+      sort -u | xargs)
 
   if [[ -n "$remaining_placeholders" ]]; then
       echo ""
       echo "[WARNING] The following variables were NOT replaced in the output files:"
       echo "    $remaining_placeholders"
-      echo "    (Note: Native variables like \$PODMAN_IP or Systemd variables might intentionally appear here)"
+      echo ""
+      echo "    Note: Remaining placeholders check may have false positives if your templates include string that have character \`$\` such as password hashes."
+      echo "    You can ignore this warning and enter 'n' if you are sure all variables were replaced correctly."
       read -p "Do you want to keep these variables as-is and continue? (y/N) " -n 1 -r
       echo ""
       if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -342,6 +387,14 @@ EOF
         exit 1
       fi
   fi
+fi
+
+# Ngừng script sớm nếu đang bật chế độ debug
+if [[ "$DEBUG_MODE" == "true" ]]; then
+  echo ""
+  echo ">>> [DEBUG MODE] All templates generated successfully in: $DEBUG_OUT_DIR"
+  echo ">>> [DEBUG MODE] Exiting script safely..."
+  exit 0
 fi
 
 # ensure install location exists

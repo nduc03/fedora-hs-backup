@@ -5,14 +5,13 @@ Environment=USER_GID=1000
 Environment=FORGEJO__database__DB_TYPE=postgres
 Environment=FORGEJO__database__HOST=host.containers.internal:5432
 Environment=FORGEJO__database__NAME=forgejo
-Image=codeberg.org/forgejo/forgejo:11
+Image=codeberg.org/forgejo/forgejo:15
 PublishPort=222:22
-Volume=%service_data_dir%/forgejo:/var/lib/gitea:Z
-Volume=%service_data_dir%/data:/data:Z
-Volume=%service_data_dir%/conf:/etc/gitea:Z
+Volume=$SERVICE_DATA_DIR/forgejo:/var/lib/gitea:Z
+Volume=$SERVICE_DATA_DIR/data:/data:Z
+Volume=$SERVICE_DATA_DIR/conf:/etc/gitea:Z
 Volume=/etc/localtime:/etc/localtime:ro
-DNS=1.1.1.1
-==%traefik_labels%==
+DNS=198.18.8.8
 Label=traefik.http.routers.forgejo.service=forgejo-svc
 Label=traefik.http.services.forgejo-svc.loadbalancer.server.port=3000
 

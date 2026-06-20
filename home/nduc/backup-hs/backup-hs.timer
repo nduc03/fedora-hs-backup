@@ -1,0 +1,10 @@
+[Unit]
+Description=Lịch chạy tự động cho backup-hs.service
+
+[Timer]
+OnCalendar=*-*-* 05:00:00
+RandomizedDelaySec=5m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,18 +1,10 @@
-
-module my-traefik 1.0;
+module my-traefik 1.1;
 
 require {
 	type container_t;
-	type user_tmp_t;
 	type container_runtime_t;
-	class sock_file write;
 	class unix_stream_socket connectto;
 }
 
-#============= container_t ==============
-
-#!!!! This avc is allowed in the current policy
 allow container_t container_runtime_t:unix_stream_socket connectto;
 
-#!!!! This avc is allowed in the current policy
-allow container_t user_tmp_t:sock_file write;

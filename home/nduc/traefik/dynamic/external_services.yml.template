@@ -7,6 +7,10 @@ tls:
     - certFile: /mycerts/ont.lan/hs-end-entity-ecdsa.pem.crt
       keyFile:  /mycerts/ont.lan/hs-end-entity-ecdsa.pem.key
 
+  options:
+      dot-options:
+        alpnProtocols:
+          - "dot"
 http:
   serversTransports:
     skip-tls:
@@ -22,14 +26,14 @@ http:
       tls: {}
 
     filebrowser:
-      rule: "Host(`file.hs.lan`)"
+      rule: "Host(`file.$PRIVATE_DOMAIN`)"
       service: filebrowser
       entryPoints:
         - websecure
       tls: {}
 
     cockpit:
-      rule: "Host(`cockpit.hs.lan`)"
+      rule: "Host(`cockpit.$PRIVATE_DOMAIN`)"
       service: cockpit
       entryPoints:
         - websecure
@@ -37,7 +41,7 @@ http:
 
     # containerized services
     forgejo:
-      rule: "Host(`forgejo.hs.lan`)"
+      rule: "Host(`forgejo.$PRIVATE_DOMAIN`)"
       service: forgejo
       entryPoints:
         - websecure
@@ -45,20 +49,20 @@ http:
       priority: 1
 
     ha:
-      rule: "Host(`ha.hs.lan`)"
+      rule: "Host(`ha.$PRIVATE_DOMAIN`)"
       service: ha
       entryPoints:
         - websecure
       tls: {}
       priority: 1
 
-    dns:
-      rule: "Host(`dns.lan`)"
-      service: dns
+    dns-le:
+      rule: "Host(`dns.$PUBLIC_DOMAIN`)"
+      service: dns-le
       entryPoints:
         - websecure
-      tls: {}
-      priority: 1
+      tls:
+        certResolver: leresolver
 
   services:
     ont:
@@ -88,7 +92,23 @@ http:
         servers:
           - url: "http://host.containers.internal:8123/"
 
-    dns:
+    dns-le:
       loadBalancer:
         servers:
-          - url: "http://host.containers.internal:8686/"
+          - url: "http://adguard-home:80/"
+
+tcp:
+  routers:
+    dns-le-dot:
+      rule: "HostSNI(`dns.$PUBLIC_DOMAIN`)"
+      entryPoints:
+        - dns-over-tls
+      service: dns-le-dot
+      tls:
+        certResolver: leresolver
+        options: "dot-options"
+  services:
+    dns-le-dot:
+      loadBalancer:
+        servers:
+          - address: "adguard-home:53"

@@ -1,4 +1,3 @@
-# Static Configuration
 global:
   checkNewVersion: false
   sendAnonymousUsage: false
@@ -26,11 +25,25 @@ entryPoints:
     asDefault: true
     http:
       tls: {}
+    http3: {}
+
+  dns-over-tls:
+    address: ":853"
 
 providers:
   docker:
     exposedByDefault: false
-    defaultRule: "Host(`{{ index .Labels \"host.subdomain\" | default .Name }}.hs.lan`)"
+    defaultRule: "Host(`{{ index .Labels \"host.subdomain\" | default .Name }}.$PRIVATE_DOMAIN`)"
   file:
     directory: "/dynamic"
     watch: true
+
+certificatesResolvers:
+  leresolver:
+    acme:
+      email: inform@$PUBLIC_DOMAIN
+      storage: /etc/traefik/acme.json
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "198.18.8.8:53"
