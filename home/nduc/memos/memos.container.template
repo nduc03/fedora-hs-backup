@@ -1,0 +1,23 @@
+[Unit]
+Description=Memos - A privacy-first, lightweight note-taking service
+After=network-online.target
+
+[Container]
+Image=docker.io/neosmemo/memos:stable
+AutoUpdate=registry
+ContainerName=memos
+
+# Expose port to localhost for Cloudflare tunnel
+PublishPort=127.0.0.1:5230:5230
+
+# Data volume
+Volume=$SERVICE_DATA_DIR/data:/var/opt/memos:Z
+
+# Traefik labels will be auto-injected here if USE_TRAEFIK_LABELS=true
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target
