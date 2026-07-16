@@ -1,0 +1,29 @@
+[Unit]
+Description=LiteLLM Proxy - OpenAI API compatible proxy for 100+ LLMs
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/litellm/litellm:main-latest
+ContainerName=litellm
+
+# Mount config file
+Volume=${SERVICE_DATA_DIR}/config:/app/config:Z
+
+# Environment file with API keys
+EnvironmentFile=${SERVICE_DIR}/litellm.env
+
+# Expose port 4000 internally, map to 18002 for cloudflare tunnel
+PublishPort=127.0.0.1:18002:4000
+
+# Run the proxy with config
+Exec=--config /app/config/config.yaml --port 4000
+
+
+
+[Service]
+TimeoutStartSec=300
+Restart=always
+
+[Install]
+WantedBy=default.target

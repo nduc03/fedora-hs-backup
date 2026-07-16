@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# don't use for newer services
+
 # This is Quadlet Service Installer Template, to use this template:
 # 1. Copy this file into the service folder.
 # 2. Rename it `mv install.sh.template install.sh` and make it executable `chmod +x install.sh`.

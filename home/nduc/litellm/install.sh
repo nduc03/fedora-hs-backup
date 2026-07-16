@@ -40,7 +40,7 @@ MOUNT_DIR_NAMES=()
 #* you can specify the directory names here. They will be created and files will be recursively copied.
 #! WARNING: the config in service directory will always overwrite the config in container data directory
 #* example definition: CONFIG_DIR_NAMES=("config")
-CONFIG_DIR_NAMES=()
+CONFIG_DIR_NAMES=("config")
 
 #* If you have extra files that need variable substitution (e.g., config files, networks),
 #* list them here with full path from the script directory.
