@@ -57,7 +57,8 @@ general_settings:
 #   routing_strategy: least-busy  # or: simple-shuffle, latency-based-routing
 
 # Optional: Logging
-# litellm_settings:
+litellm_settings:
+  set_verbose: False      # Switch off Debug Logging
 #   success_callback: ["langfuse"]  # Track requests
 #   failure_callback: ["langfuse"]
 

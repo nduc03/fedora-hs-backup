@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# don't use for newer services
+# don't use for newer services, use v2 instead
 
 # This is Quadlet Service Installer Template, to use this template:
 # 1. Copy this file into the service folder.

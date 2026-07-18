@@ -1,0 +1,23 @@
+[Unit]
+Description=Lorem Video Service
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=forgejo.hs.lan/nduc/lorem-video-pregen:latest
+ContainerName=lorem-video
+
+# Load environment variables
+EnvironmentFile=$SERVICE_DIR/lorem-video.env
+
+# Port mapping (Host:Container)
+PublishPort=3000:3000
+
+# Volume mapping for data persistence
+Volume=$SERVICE_DATA_DIR/data:/app/data:Z
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
