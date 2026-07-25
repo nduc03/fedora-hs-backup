@@ -29,13 +29,12 @@ USE_TRAEFIK_LABELS=false
 #* Set to true to route the service via PUBLIC_DOMAIN if you want to leverage the powaaahh 💪 of Let's Encrypt!
 #* Note: This does NOT necessarily expose your service to the internet. It simply provides a valid SSL cert
 #* so you don't have to manually install root certificates on every device across your LAN.
-#* Note: Also requires USE_TRAEFIK_LABELS set to true, and PUBLIC_DOMAIN variable defined in ~/hs-info.env or ctv.env.
 ENABLE_PUBLIC_DOMAIN=false
 
 #* If your service has mount points, you can specify the directory names here
 #* It will automatically create these directories in the service data directory and adjust permissions
 #* example definition: MOUNT_DIR_NAMES=("data" "logs")
-MOUNT_DIR_NAMES=()
+MOUNT_DIR_NAMES=("data")
 
 #* If you have config directories containing files that you want to be copied to the container data directory,
 #* you can specify the directory names here. They will be created and files will be recursively copied.
@@ -48,7 +47,7 @@ CONFIG_DIR_NAMES=()
 #* The script will process them with envsubst and output without the '.template' extension.
 #* Should not include the main .container/.quadlet template file, as it's processed automatically.
 #* Example: EXTRA_TEMPLATE_FILES=("etc/something/config.yml.template" "app-settings.conf.template")
-EXTRA_TEMPLATE_FILES=()
+EXTRA_TEMPLATE_FILES=("firecrawl-playwright.container.template")
 
 #* Add more customizable variables here if needed, for example:
 #* MY_CUSTOM_LOG="/path/to/custom.log"
@@ -82,6 +81,32 @@ pre_install() {
 
   echo ">>> Running pre-install hooks for: $SERVICE_NAME"
 
+  echo ">>> Installing firecrawl-rabbitmq and firecrawl-playwright containers"
+  if [[ -f "$SCRIPT_DIR/firecrawl-rabbitmq.container" ]]; then
+    $SUDO cp "$SCRIPT_DIR/firecrawl-rabbitmq.container" "$INSTALL_LOCATION/"
+  else
+    echo ">>> [WARNING] firecrawl-rabbitmq.container not found in $SCRIPT_DIR. Skipping installation."
+  fi
+  if [[ -f "$SCRIPT_DIR/firecrawl-playwright.container" ]]; then
+    $SUDO cp "$SCRIPT_DIR/firecrawl-playwright.container" "$INSTALL_LOCATION/"
+  else
+    echo ">>> [WARNING] firecrawl-playwright.container not found in $SCRIPT_DIR. Skipping installation."
+  fi
+
+  if [[ ! -f "$SCRIPT_DIR/.nuq-initiated" ]]; then
+    echo ">>> Initializing NUQ Database on 192.168.1.220..."
+    if [[ -f "$HOME/hs-info.env" ]]; then
+      source "$HOME/hs-info.env"
+    fi
+    export PGPASSWORD="$POSTGRES_PASS"
+    psql -h 192.168.1.220 -p 5432 -U "$POSTGRES_USER" -d postgres -f "$SCRIPT_DIR/init-nuq.sql"
+    if [ $? -eq 0 ]; then
+      touch "$SCRIPT_DIR/.nuq-initiated"
+      echo ">>> NUQ Database initialized successfully."
+    else
+      echo ">>> [ERROR] Failed to initialize NUQ Database."
+    fi
+  fi
 }
 
 post_install() {
@@ -96,7 +121,6 @@ post_install() {
   local SYSTEMCTL_CMD="$9"
 
   echo ">>> Running post-install hooks for: $SERVICE_NAME"
-
 }
 
 #* =========================================

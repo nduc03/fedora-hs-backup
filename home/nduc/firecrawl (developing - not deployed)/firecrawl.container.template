@@ -1,0 +1,30 @@
+[Unit]
+Description=Firecrawl API Service
+Requires=firecrawl-rabbitmq.service firecrawl-playwright.service
+After=firecrawl-rabbitmq.service firecrawl-playwright.service
+
+[Container]
+ContainerName=firecrawl
+Image=ghcr.io/firecrawl/firecrawl
+Network=firecrawl.network
+EnvironmentFile=${SERVICE_DIR}/.env
+Environment=REDIS_URL=redis://host.containers.internal:6379
+Environment=REDIS_RATE_LIMIT_URL=redis://host.containers.internal:6379
+Environment=POSTGRES_USER=${POSTGRES_USER}
+Environment=POSTGRES_PASSWORD=${POSTGRES_PASS}
+Environment=POSTGRES_DB=firecrawl
+Environment=POSTGRES_HOST=host.containers.internal
+Environment=POSTGRES_PORT=5432
+Environment=PLAYWRIGHT_MICROSERVICE_URL=http://firecrawl-playwright:3000/scrape
+Environment=NUQ_RABBITMQ_URL=amqp://firecrawl-rabbitmq:5672
+Environment=ENV=local
+Environment=BULL_AUTH_KEY=d157d8570d80cb5f1083674f82920dd434def7c918795869
+Exec=node dist/src/harness.js --start-docker
+PublishPort=127.0.0.1:3002:3002
+
+[Install]
+WantedBy=default.target
+
+[Service]
+Restart=always
+RestartSec=5

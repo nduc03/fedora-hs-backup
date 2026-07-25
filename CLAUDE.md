@@ -11,7 +11,7 @@ This is a backup/documentation repository for a Fedora-based homelab server. It 
 - Backup and deployment tooling
 
 **Architecture Pattern:** Services run as rootless Podman containers managed via systemd Quadlet files. Configuration lives in `home/nduc/<service>/` directories. Each service has:
-- `install.sh` - customized from `install.sh.template` for Quadlet setup
+- `install.sh` - customized from `install-v2.sh.template` for Quadlet setup
 - `*.container` or `*.quadlet` files - service definitions
 - Service-specific config directories (config/, data/, logs/)
 
@@ -58,7 +58,7 @@ chmod +x install.sh
 ### Quadlet Service Installation
 Each service follows a template-based installation system using Fedora's Quadlet (systemd unit generator for Podman). The pattern:
 
-1. Copy `install.sh.template` from parent directory or use existing `install.sh`
+1. Copy `install-v2.sh.template` from parent directory or use existing `install.sh`
 2. Customize variables at top of script (marked with `#*`):
    - `ROOTLESS=true/false` - whether container runs without root
    - `USE_TRAEFIK_LABELS=true/false` - enable automatic Traefik discovery

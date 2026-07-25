@@ -1,0 +1,17 @@
+[Unit]
+Description=Firecrawl Playwright Service
+
+[Container]
+ContainerName=firecrawl-playwright
+Image=ghcr.io/firecrawl/playwright-service:latest
+Network=firecrawl.network
+EnvironmentFile=${SERVICE_DIR}/.env
+Tmpfs=/tmp/.cache:noexec,nosuid,size=1g
+PodmanArgs=--cpus=1 --memory=1g
+
+[Install]
+WantedBy=default.target
+
+[Service]
+Restart=always
+RestartSec=5

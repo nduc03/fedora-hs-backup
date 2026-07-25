@@ -1,0 +1,15 @@
+[Unit]
+Description=Firecrawl RabbitMQ Service
+
+[Container]
+ContainerName=firecrawl-rabbitmq
+Image=docker.io/library/rabbitmq:3-management
+Network=firecrawl.network
+Exec=rabbitmq-server
+
+[Install]
+WantedBy=default.target
+
+[Service]
+Restart=always
+RestartSec=5
