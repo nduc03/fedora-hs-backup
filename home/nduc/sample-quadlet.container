@@ -4,6 +4,7 @@ Description=Description here; this is a very basic sample Quadlet file
 [Container]
 # docker shortcut: docker.io/library/<image>:tag, docker.io/<user>/<image>:tag
 Image=registry.example/user/container:tag
+AutoUpdate=registry
 ContainerName=container-name
 PublishPort=<host_port>:<container_port>/tcp
 PublishPort=<host_port>:<container_port>/udp

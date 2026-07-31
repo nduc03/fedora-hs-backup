@@ -1,53 +1,10 @@
-model_list:
-  # TrollLLM - Claude Haiku 4.5
-  - model_name: claude-haiku-4-5-20251001
-    litellm_params:
-      model: anthropic/claude-haiku-4-5-20251001
-      api_base: https://chat.trollllm.xyz
-      api_key: os.environ/TROLLLLM_API_KEY
-      extra_headers:
-        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-
-  # TrollLLM - Claude Sonnet 5
-  - model_name: claude-sonnet-5
-    litellm_params:
-      model: anthropic/claude-sonnet-5
-      api_base: https://chat.trollllm.xyz
-      api_key: os.environ/TROLLLLM_API_KEY
-      extra_headers:
-        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-
-  # TrollLLM - Claude Opus 4.8
-  - model_name: claude-opus-4-8
-    litellm_params:
-      model: anthropic/claude-opus-4-8
-      api_base: https://chat.trollllm.xyz
-      api_key: os.environ/TROLLLLM_API_KEY
-      extra_headers:
-        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-
-  # TrollLLM - Claude Fable 5
-  - model_name: claude-fable-5
-    litellm_params:
-      model: anthropic/claude-fable-5
-      api_base: https://chat.trollllm.xyz
-      api_key: os.environ/TROLLLLM_API_KEY
-      extra_headers:
-        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-
-  # TrollLLM - Wildcard (phòng hờ muốn dùng nhanh model khác)
-  - model_name: "*"
-    litellm_params:
-      model: anthropic/*
-      api_base: https://chat.trollllm.xyz
-      api_key: os.environ/TROLLLLM_API_KEY
-      extra_headers:
-        User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-
 # General settings
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: os.environ/DATABASE_URL
+  use_x_forwarded_for: true
+  mcp_trusted_proxy_ranges:
+    - 127.0.0.1/32
 
 # Optional: Router settings for load balancing with Redis
 # router_settings:

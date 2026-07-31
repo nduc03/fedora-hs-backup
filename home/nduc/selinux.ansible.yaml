@@ -1,0 +1,10 @@
+- name: Allow virt to sandbox use all caps
+  command: semanage boolean -m --on virt_sandbox_use_all_caps
+
+- name: Allow virt to use nfs
+  command: semanage boolean -m --on virt_use_nfs
+
+- name: Set up fcontext customizations
+  shell: |
+    semanage fcontext -D
+    semanage fcontext -a -f a -t container_file_t -r 's0' '/home/nduc/container-data(/.*)?'

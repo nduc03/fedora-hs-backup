@@ -6,6 +6,7 @@ Wants=network-online.target
 [Container]
 Image=docker.io/litellm/litellm:main-latest
 ContainerName=litellm
+AutoUpdate=registry
 
 # Mount config file
 Volume=${SERVICE_DATA_DIR}/config:/app/config:Z
