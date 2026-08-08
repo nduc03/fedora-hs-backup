@@ -459,14 +459,17 @@ EOF
         exit 1
       fi
   fi
+else
+  # Không dùng template -> cài thẳng từ file gốc, không qua TMP_DIR
+  QUADLET_FILE_LOCATION="$SCRIPT_DIR/$QUADLET_FILENAME"
 fi
 
 # Ngừng script sớm nếu đang bật chế độ debug
-if [[ "$DEBUG_MODE" == "true" ]]; then
-  echo ""
+if [[ "$DEBUG_MODE" == "true" && "$USE_TEMPLATE" == "true" ]]; then
   echo ">>> [DEBUG MODE] All templates generated successfully in: $DEBUG_OUT_DIR"
-  echo ">>> [DEBUG MODE] Exiting script safely..."
   exit 0
+elif [[ "$DEBUG_MODE" == "true" ]]; then
+  echo ">>> [DEBUG MODE] USE_TEMPLATE=false, không có gì để debug template. Bỏ qua."
 fi
 
 # ensure install location exists
