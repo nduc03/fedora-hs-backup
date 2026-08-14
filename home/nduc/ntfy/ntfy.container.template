@@ -3,11 +3,12 @@ Description=ntfy notification service - Self-hosted
 
 [Container]
 Image=docker.io/binwiederhier/ntfy:latest
+AutoUpdate=registry
 ContainerName=ntfy
 Exec=serve
 PublishPort=7899:80
 Environment=TZ=UTC+7
-Environment=NTFY_BASE_URL="https://ntfy.nduc.io.vn"
+Environment=NTFY_BASE_URL="https://ntfy.%public_domain%"
 Environment=NTFY_BEHIND_PROXY="true"
 Environment=NTFY_AUTH_DEFAULT_ACCESS="deny-all"
 Environment=NTFY_ENABLE_LOGIN="true"

@@ -2,7 +2,8 @@
 Description=Unbound DNS resolver
 
 [Container]
-Image=forgejo.hs.lan/nduc/unbound:latest
+Image=forgejo.$PUBLIC_DOMAIN/nduc/unbound:latest
+AutoUpdate=registry
 ContainerName=unbound
 Network=traefik
 IP=198.18.8.8

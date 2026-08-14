@@ -29,7 +29,7 @@ USE_TRAEFIK_LABELS=true
 #* Set to true to route the service via PUBLIC_DOMAIN if you want to leverage the powaaahh 💪 of Let's Encrypt!
 #* Note: This does NOT necessarily expose your service to the internet. It simply provides a valid SSL cert
 #* so you don't have to manually install root certificates on every device across your LAN.
-ENABLE_PUBLIC_DOMAIN=false
+ENABLE_PUBLIC_DOMAIN=true
 
 #* If your service has mount points, you can specify the directory names here
 #* It will automatically create these directories in the service data directory and adjust permissions

@@ -5,7 +5,9 @@ Environment=USER_GID=1000
 Environment=FORGEJO__database__DB_TYPE=postgres
 Environment=FORGEJO__database__HOST=host.containers.internal:5432
 Environment=FORGEJO__database__NAME=forgejo
+Environment=FORGEJO__server__ROOT_URL=https://forgejo.$PUBLIC_DOMAIN
 Image=codeberg.org/forgejo/forgejo:15
+AutoUpdate=registry
 PublishPort=222:22
 Volume=$SERVICE_DATA_DIR/forgejo:/var/lib/gitea:Z
 Volume=$SERVICE_DATA_DIR/data:/data:Z

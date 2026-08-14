@@ -4,8 +4,9 @@ After=network-online.target
 Wants=network-online.target
 
 [Container]
-Image=forgejo.hs.lan/nduc/lorem-video-pregen:latest
+Image=forgejo.$PUBLIC_DOMAIN/nduc/lorem-video-pregen:latest
 ContainerName=lorem-video
+AutoUpdate=registry
 
 # Load environment variables
 EnvironmentFile=$SERVICE_DIR/lorem-video.env

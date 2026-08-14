@@ -2,7 +2,7 @@
 Description=Description here; this is a very basic sample Quadlet file
 
 [Container]
-Image=forgejo.hs.lan/nduc/bgm-player-pwa:latest
+Image=forgejo.$PUBLIC_DOMAIN/nduc/bgm-player-pwa:latest
 AutoUpdate=registry
 ContainerName=bgm-player-pwa
 PublishPort=127.0.0.1:13366:80/tcp
