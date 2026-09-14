@@ -1,0 +1,25 @@
+[Unit]
+Description=Firefly III - A free and open source personal finance manager
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+ContainerName=fireflyiii
+Image=docker.io/fireflyiii/core:latest
+AutoUpdate=registry
+
+# Expose to localhost port 10080
+PublishPort=127.0.0.1:10080:8080
+
+# Persistent storage for uploaded files
+Volume=${SERVICE_DATA_DIR}/upload:/var/www/html/storage/upload:Z,U
+
+# Environment file with database configuration and APP_KEY
+EnvironmentFile=${SERVICE_DIR}/fireflyiii.env
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target
