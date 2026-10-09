@@ -31,6 +31,7 @@ USE_TRAEFIK_LABELS=false
 #* so you don't have to manually install root certificates on every device across your LAN.
 #* Note: Also requires USE_TRAEFIK_LABELS set to true, and PUBLIC_DOMAIN variable defined in ~/hs-info.env or ctv.env.
 #* Khi ENABLE_PUBLIC_DOMAIN=true, tự tạo DNS rewrites IPv4 và ULA IPv6 trong AdGuard Home.
+#* Riêng image AdGuard Home bỏ qua API DNS để có thể bootstrap chính DNS server.
 ENABLE_PUBLIC_DOMAIN=false
 
 #* If your service has mount points, you can specify the directory names here
@@ -302,7 +303,31 @@ make_config_dir() {
     done
 }
 
+quadlet_uses_adguard_home() {
+    awk '
+        /^[[:space:]]*\[/ || /^[[:space:]]*---[[:space:]]*$/ {
+            in_container = ($0 ~ /^[[:space:]]*\[Container\][[:space:]]*$/)
+        }
+        in_container && /^[[:space:]]*Image[[:space:]]*=/ {
+            image = $0
+            sub(/^[[:space:]]*Image[[:space:]]*=[[:space:]]*/, "", image)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", image)
+            if (image ~ /^".*"$/ || image ~ /^\047.*\047$/)
+                image = substr(image, 2, length(image) - 2)
+            if (image !~ /[[:space:]]/ && image ~ /(^|\/)adguard\/adguardhome(:[^@[:space:]]+)?(@[^:[:space:]]+:[^[:space:]]+)?$/)
+                found = 1
+        }
+        END { exit !found }
+    ' "$1"
+}
+
 register_adguard_rewrites() (
+    # Use the rendered image; AdGuard cannot depend on its own API during bootstrap.
+    if quadlet_uses_adguard_home "$QUADLET_FILE_LOCATION"; then
+        echo ">>> Skipping DNS rewrites: service uses the AdGuard Home image (bootstrap)."
+        return 0
+    fi
+    echo ">>> Now automatically registering DNS rewrites in AdGuard Home"
     # Nạp env trong subshell để không thay đổi các biến của luồng cài đặt.
     if [[ -f "$HOME/hs-info.env" ]]; then
         source "$HOME/hs-info.env"
@@ -360,6 +385,7 @@ register_adguard_rewrites() (
         fi
         echo "    -> Added DNS rewrite: $DOMAIN -> $ANSWER"
     done
+    echo ">>> DNS rewrites registration completed."
 )
 
 echo ">>> Validating execution environment..."
@@ -618,7 +644,5 @@ echo "To check status:"
 echo "  $SYSTEMCTL_CMD status $SERVICE_NAME"
 
 if [[ "$ENABLE_PUBLIC_DOMAIN" == "true" ]]; then
-  echo ">>> Now automatically registering DNS rewrites in AdGuard Home"
   register_adguard_rewrites
-  echo ">>> DNS rewrites registration completed."
 fi

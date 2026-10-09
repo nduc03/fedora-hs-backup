@@ -3,12 +3,29 @@
 import base64
 import ipaddress
 import json
+import re
 import urllib.error
 import urllib.request
 
 from .common import InstallError
 from .context import InstallContext
 from .traefik import domain_value
+
+
+def is_bootstrap_service(quadlet: str) -> bool:
+    """Recognize AdGuard Home by the rendered container image, including bundles."""
+    in_container = False
+    for line in quadlet.splitlines():
+        line = line.strip()
+        if line == "---" or line.startswith("["):
+            in_container = line == "[Container]"
+        elif in_container and (match := re.match(r"Image\s*=\s*(.*)$", line)):
+            image = match[1].strip()
+            if len(image) >= 2 and image[0] in "\"'" and image[-1] == image[0]:
+                image = image[1:-1]
+            if re.fullmatch(r"(?:[^/\s]+/)*adguard/adguardhome(?::[^@\s]+)?(?:@[^:\s]+:[^\s]+)?", image):
+                return True
+    return False
 
 
 def validate_settings(context: InstallContext) -> None:

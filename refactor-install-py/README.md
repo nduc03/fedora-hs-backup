@@ -155,6 +155,11 @@ Traefik tự chèn network và label LAN ngay dưới `[Container]`, dùng `PRIV
 
 `enable_public_domain` cũng bật đăng ký AdGuard, cần `PUBLIC_DOMAIN`, `ADGUARD_USERNAME`, `ADGUARD_PASSWORD`. API dùng HTTPS `https://dns.<PUBLIC_DOMAIN>/control`, Basic Auth và timeout 30 giây; giữ xác minh TLS mặc định. Đọc `/rewrite/list`, chỉ POST `/rewrite/add` cho cặp domain/địa chỉ chưa có, bao gồm IPv4 và ULA thực sự; không dùng `::1`, link-local hoặc IPv6 global làm rewrite ULA. Credentials chỉ gửi trong header, không ghi vào log lỗi HTTP.
 
+Nếu image container sau render là `adguard/adguardhome` (có thể có registry,
+tag hoặc digest), bộ cài bỏ qua kiểm tra credential và mọi API DNS để bootstrap
+AdGuard Home. Bundle chứa container này cũng bỏ qua DNS. Cờ public domain và
+label Traefik vẫn giữ nguyên; service dùng image khác vẫn đăng ký DNS như trên.
+
 ## Kiểm thử
 
 Từ folder bộ cài:

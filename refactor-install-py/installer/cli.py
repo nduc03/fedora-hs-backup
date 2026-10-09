@@ -34,10 +34,10 @@ def validate_execution(config: ServiceConfig) -> None:
         raise InstallError(f"Thiếu lệnh cần thiết: {', '.join(missing)}")
 
 
-def preflight(context: InstallContext) -> None:
+def preflight(context: InstallContext, *, skip_adguard_dns: bool = False) -> None:
     validate_hooks(context)
     validate_directories(context)
-    if context.config.enable_public_domain:
+    if context.config.enable_public_domain and not skip_adguard_dns:
         adguard.validate_settings(context)
     help_text = context.runner.run(["podman", "quadlet", "install", "--help"]).stdout
     if "--reload-systemd" not in help_text:
@@ -69,7 +69,8 @@ def run_pipeline(context: InstallContext, *, debug: bool, allow_unresolved: bool
                 if not sys.stdin.isatty() or input("Giữ nguyên các biến này và tiếp tục? (y/N) ").strip().lower() != "y":
                     raise InstallError("Dừng do biến chưa khai báo; dùng --allow-unresolved nếu muốn giữ nguyên.")
             stage = "kiểm tra trước cài đặt"
-            preflight(context)
+            skip_adguard_dns = adguard.is_bootstrap_service(rendered.main.staged.read_text(encoding="utf-8"))
+            preflight(context, skip_adguard_dns=skip_adguard_dns)
             stage = "xuất template phụ"
             publish_templates(context, rendered, debug=False)
             stage = "chuẩn bị thư mục dữ liệu/quyền"
@@ -86,8 +87,11 @@ def run_pipeline(context: InstallContext, *, debug: bool, allow_unresolved: bool
             stage = "post_install"
             run_hooks(context, "post_install")
             if context.config.enable_public_domain:
-                stage = "DNS AdGuard"
-                adguard.register_rewrites(context)
+                if skip_adguard_dns:
+                    context.log(">>> Bỏ qua DNS rewrite: service dùng image AdGuard Home (bootstrap).")
+                else:
+                    stage = "DNS AdGuard"
+                    adguard.register_rewrites(context)
             context.log(">>> Hoàn tất.")
             prefix = " ".join(context.systemctl_argv)
             if not context.config.rootless:
