@@ -6,6 +6,7 @@ from dataclasses import dataclass, field, fields
 from pathlib import Path
 
 from .common import InstallError, within
+from .tpl_engines import validate_engine_selector
 
 VARIABLE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 UNIT_NAME = re.compile(r"^[A-Za-z0-9_.@:-]+\.service$")
@@ -15,6 +16,7 @@ UNIT_NAME = re.compile(r"^[A-Za-z0-9_.@:-]+\.service$")
 class ServiceConfig:
     rootless: bool = True
     use_template: bool = True
+    template_engine: str = "shell"
     file_type: str = "container"
     use_traefik_labels: bool = False
     enable_public_domain: bool = False
@@ -52,6 +54,7 @@ def load_config(service_dir: Path) -> ServiceConfig:
     for key in ("rootless", "use_template", "use_traefik_labels", "enable_public_domain"):
         if key in raw and type(raw[key]) is not bool:
             raise InstallError(f"{key} phải là boolean TOML.")
+    raw["template_engine"] = validate_engine_selector(raw.get("template_engine", "shell"))
     if raw.get("file_type", "container") not in ("container", "quadlets"):
         raise InstallError("file_type chỉ nhận 'container' hoặc 'quadlets'.")
     for key in ("mount_dirs", "config_dirs", "extra_template_files", "systemd_units"):

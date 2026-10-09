@@ -1,0 +1,11 @@
+template_engine = "legacy"
+rootless = true
+use_template = true
+mount_dirs = ["data"]
+extra_template_files = ["config/message.txt.template"]
+
+[variables]
+IMAGE = "docker.io/library/nginx:alpine"
+HOST_IPV4 = "192.0.2.10"
+HOST_ULA_IPV6 = "fd00::10"
+APP_MESSAGE = "Giữ nguyên $HOME và %another_var% trong giá trị được chèn."

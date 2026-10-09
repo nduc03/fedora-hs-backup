@@ -1,36 +1,21 @@
-"""Single-pass, envsubst-style substitution and staged template outputs."""
+"""Template orchestration independent of the configured rendering engine."""
 
-import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 
 from .common import InstallError, within, write_text
 from .context import InstallContext
+from .tpl_engines import TemplateEngine, load_engine, validate_render_result
+from .tpl_engines.shell import ShellEngine
 from .traefik import inject_labels
 
-VARIABLE = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
-PASSWORD_HASH = re.compile(r"\$(?:1|2[abxy]|apr1|argon2[a-z]*|5|6)\$[A-Za-z0-9./$=+,-]+")
 
-
-def substitute(text: str, variables: dict[str, str]) -> tuple[str, tuple[str, ...]]:
-    """Replace known names once, preserving hashes, unknowns and shell operators."""
-    missing = set()
-
-    def replace(match: re.Match[str]) -> str:
-        name = match[1] or match[2]
-        if name in variables:
-            return variables[name]
-        missing.add(name)
-        return match[0]
-
-    fragments = []
-    position = 0
-    for password in PASSWORD_HASH.finditer(text):
-        fragments.append(VARIABLE.sub(replace, text[position:password.start()]))
-        fragments.append(password[0])
-        position = password.end()
-    fragments.append(VARIABLE.sub(replace, text[position:]))
-    return "".join(fragments), tuple(sorted(missing))
+def substitute(text: str, variables: Mapping[str, str]) -> tuple[str, tuple[str, ...]]:
+    """Compatibility helper for callers of the original shell substitution function."""
+    result = ShellEngine().render(text, variables)
+    return result.text, result.unresolved
 
 
 @dataclass(frozen=True)
@@ -46,18 +31,30 @@ class RenderedTemplates:
     extras: tuple[RenderedFile, ...]
 
 
-def render_templates(context: InstallContext, staging: Path) -> RenderedTemplates:
+def render_templates(context: InstallContext, staging: Path, *,
+                     engine: TemplateEngine | None = None) -> RenderedTemplates:
     filename = f"{context.service_name}.{context.config.file_type}"
     relative = filename + (".template" if context.config.use_template else "")
     source = within(context.service_dir, relative)
     if not source.is_file():
         raise InstallError(f"Thiếu Quadlet đầu vào: {source}")
+    if context.config.use_template and engine is None:
+        engine = load_engine(context.config.template_engine)
+    variables = MappingProxyType(context.variables)
 
     def render(input_file: Path, output_name: str, main: bool = False) -> RenderedFile:
         text = input_file.read_text(encoding="utf-8-sig")
         unresolved = ()
         if context.config.use_template:
-            text, unresolved = substitute(text, context.variables)
+            assert engine is not None
+            try:
+                result = validate_render_result(engine.render(text, variables))
+            except InstallError as error:
+                raise InstallError(f"Template {input_file} (engine {context.config.template_engine}): {error}") from error
+            except (Exception, SystemExit) as error:
+                # Plugin exceptions may include template contents or secret variable values.
+                raise InstallError(f"Engine {context.config.template_engine} không render được {input_file}: {type(error).__name__}.") from error
+            text, unresolved = result.text, result.unresolved
             if main:
                 text = inject_labels(text, context)
         target = within(staging, output_name)

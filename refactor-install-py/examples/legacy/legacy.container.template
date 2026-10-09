@@ -1,0 +1,14 @@
+[Unit]
+Description=Ví dụ engine legacy: %service_name%
+
+[Container]
+Image=%image%
+ContainerName=%SERVICE_NAME%
+Volume=%Service_Data_Dir%/data:/usr/share/nginx/html:Z
+PublishPort=%host_ipv4%:8080:80
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

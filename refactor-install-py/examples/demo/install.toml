@@ -1,6 +1,7 @@
 # Chỉ cấu hình riêng của service, không chứa bản sao bộ cài.
 rootless = true
 use_template = true
+template_engine = "shell"
 file_type = "container"
 use_traefik_labels = true
 enable_public_domain = false

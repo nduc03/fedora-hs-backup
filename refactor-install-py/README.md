@@ -27,6 +27,7 @@ Chỉ render các ví dụ, không cài đặt:
 ```bash
 python3 install.py demo --services-root ./examples --dbg-templ
 python3 install.py stack --services-root ./examples --dbg-templ
+python3 install.py legacy --services-root ./examples --dbg-templ
 ```
 
 Trên Windows dùng `python` thay `python3`. `--services-root` tương đối được tính từ thư mục gọi lệnh; mặc định home không phụ thuộc CWD hoặc vị trí `install.py`.
@@ -58,6 +59,7 @@ hooks/post_install.py            # tùy chọn
 ```toml
 rootless = true
 use_template = true
+template_engine = "shell"
 file_type = "container"
 use_traefik_labels = false
 enable_public_domain = false
@@ -80,7 +82,7 @@ pre_install = ["hooks/pre_install.py:run"]
 post_install = ["hooks/post_install.py:run"]
 ```
 
-Mặc định: rootless/template bật; `file_type="container"`; Traefik/public domain tắt; các danh sách rỗng; container UID/GID `1000:1000`; dữ liệu tại `~/container-data/<service_name>`; unit `<service_name>.service`. `service_data_dir` nhận đường dẫn tuyệt đối, `~/...`, hoặc tương đối bên trong service. UID/GID tài khoản host lấy từ hệ thống, không mặc định là 1000. Quadlet rootless cài tại `~/.config/containers/systemd`, hoặc `$XDG_CONFIG_HOME/containers/systemd` nếu environment của tiến trình đặt gốc XDG tuyệt đối; rootful tại `/etc/containers/systemd`.
+Mặc định: rootless/template bật; `template_engine="shell"`; `file_type="container"`; Traefik/public domain tắt; các danh sách rỗng; container UID/GID `1000:1000`; dữ liệu tại `~/container-data/<service_name>`; unit `<service_name>.service`. `service_data_dir` nhận đường dẫn tuyệt đối, `~/...`, hoặc tương đối bên trong service. UID/GID tài khoản host lấy từ hệ thống, không mặc định là 1000. Quadlet rootless cài tại `~/.config/containers/systemd`, hoặc `$XDG_CONFIG_HOME/containers/systemd` nếu environment của tiến trình đặt gốc XDG tuyệt đối; rootful tại `/etc/containers/systemd`.
 
 Các đường dẫn mount/config/template/hook phải tương đối và không chứa `..` hay thoát khỏi gốc qua symlink. Tùy chọn không được hỗ trợ, sai kiểu, template/hook cần dùng bị thiếu hoặc bundle không hợp lệ đều làm dừng cài đặt. Nguồn `config_dirs` chưa tồn tại thì cảnh báo và bỏ qua copy, giống template Bash.
 
@@ -104,17 +106,87 @@ ADGUARD_USERNAME=admin
 ADGUARD_PASSWORD='mat-khau-co-$-va-#'
 ```
 
-Template hỗ trợ `$VAR` và `${VAR}`, phân biệt hoa/thường. Chỉ thay biến đã khai báo trong một lượt; không mở rộng tiếp giá trị được chèn. Không thực thi lệnh hoặc xử lý `${VAR:-default}`. Renderer không coi `$$` là escape: với `A=ok`, `$$A` thành `$ok`, tương tự `envsubst`; hash mật khẩu literal phổ biến được bảo toàn. Biến rỗng có khai báo được thay bằng chuỗi rỗng.
+Engine mặc định `shell` hỗ trợ `$VAR` và `${VAR}`, phân biệt hoa/thường. Chỉ thay biến đã khai báo trong một lượt; không mở rộng tiếp giá trị được chèn. Không thực thi lệnh hoặc xử lý `${VAR:-default}`. Renderer không coi `$$` là escape: với `A=ok`, `$$A` thành `$ok`, tương tự `envsubst`; hash mật khẩu literal phổ biến được bảo toàn. Biến rỗng có khai báo được thay bằng chuỗi rỗng.
 
 Biến chưa khai báo giữ nguyên; cảnh báo file/tên biến. Debug chỉ cảnh báo. Cài thật hỏi `(y/N)`; môi trường không tương tác tự dừng, trừ khi chọn `--allow-unresolved`. Dùng cờ này khi chủ động giữ biến runtime của systemd/container. Renderer không cảnh báo lại ký tự `$` nằm trong giá trị đã chèn.
 
 Các biến nội bộ: `SERVICE_DIR`, `SCRIPT_DIR`, `SCRIPT_DIR_NAME`, `SERVICE_NAME`, `SERVICE_DATA_DIR`, `INSTALL_LOCATION`, `HOST_IPV4`, `HOST_ULA_IPV6`, `SUDO`, `SYSTEMCTL_CMD`. Hai biến địa chỉ có thể đặt bằng env hoặc `[variables]`; nếu thiếu thì dò interface có IPv4 default route trên Linux. ULA hỗ trợ cả `fc00::/7`, fallback `::1`. Trong context IPv6 là địa chỉ raw; trong mapping template `HOST_ULA_IPV6` có ngoặc vuông để giữ cách dùng hiện tại.
 
-Template chính render vào staging; template phụ chỉ xuất sang service sau khi kiểm tra và xác nhận biến. File phụ `.env` được tạo mode 600; file phụ khác mode 644. Bộ cài không chuyển `%service_dir%` hay các placeholder legacy; hãy đổi thủ công sang cú pháp `$...` khi chuyển từng service.
+Template chính render vào staging; template phụ chỉ xuất sang service sau khi kiểm tra và xác nhận biến. File phụ `.env` được tạo mode 600; file phụ khác mode 644. Cả template chính và phụ dùng cùng engine, chọn trước khi render.
+
+## Chọn và bổ sung template engine
+
+Chọn engine bằng tùy chọn cấp gốc trong `install.toml`, trước các bảng
+`[variables]`/`[hooks]`:
+
+```toml
+template_engine = "legacy"
+
+[variables]
+VAR_NAME = "hello"
+```
+
+Engine `legacy` thay `%var_name%`, `%VAR_NAME%` và `%Var_Name%` thành `hello`.
+Tên khóa truyền vào cũng không phân biệt hoa/thường. Nếu mapping chứa các khóa
+chỉ khác hoa/thường nhưng khác giá trị, engine báo lỗi kèm tên biến để tránh
+chọn nhầm giá trị; khóa trùng với cùng giá trị được chấp nhận.
+
+Engine legacy chỉ xử lý `%NAME%`, giữ `$VAR`, `${VAR}`, hash mật khẩu và các
+specifier systemd như `%n`/`%i`. Thay một lượt, không render tiếp giá trị được
+chèn, không escape hoặc chạy shell. Biến chưa khai báo giữ nguyên placeholder,
+cảnh báo tên viết hoa; cài thật vẫn cần xác nhận hoặc `--allow-unresolved`.
+Ví dụ template chính và phụ nằm tại [examples/legacy](examples/legacy/).
+Không cần chuyển cú pháp placeholder để dùng engine này.
+
+Factory dùng `importlib` để tạo class từ selector `package.module:EngineClass`.
+Hai alias `shell` và `legacy` tương ứng với
+`installer.tpl_tpl_engines.shell:ShellEngine` và `installer.tpl_engines.legacy:LegacyEngine`.
+Ví dụ chọn class trực tiếp:
+
+```toml
+template_engine = "installer.tpl_engines.legacy:LegacyEngine"
+```
+
+Engine mới chỉ cần class có constructor không tham số và thực hiện contract
+`TemplateEngine` trong `installer/tpl_engines/base.py`: nhận text, mapping biến chỉ
+đọc và trả `RenderResult(text, unresolved)`. `unresolved` là tuple tên biến chưa
+khai báo. Không bắt buộc kế thừa `Protocol`; factory kiểm tra class/phương thức,
+phần điều phối kiểm tra kiểu kết quả trước khi dùng.
+
+Ví dụ thêm `installer/tpl_engines/custom.py`, xử lý cú pháp `[[NAME]]`:
+
+```python
+import re
+from collections.abc import Mapping
+from installer.tpl_engines import RenderResult
+
+
+class CustomEngine:
+    def render(self, text: str, variables: Mapping[str, str]) -> RenderResult:
+        missing = set()
+
+        def replace(match):
+            name = match[1]
+            if name in variables:
+                return variables[name]
+            missing.add(name)
+            return match[0]
+
+        output = re.sub(r"\[\[([A-Za-z_][A-Za-z0-9_]*)\]\]", replace, text)
+        return RenderResult(output, tuple(sorted(missing)))
+```
+
+Sau đó đặt `template_engine="installer.tpl_engines.custom:CustomEngine"` trong TOML;
+không cần sửa registry hoặc luồng cài đặt. Module cũng có thể thuộc package được
+cài trong Python hoặc có trên `PYTHONPATH`; dependency của engine cần được cài
+trước khi chạy. Một instance engine được dùng cho toàn bộ file của lần render.
+Engine chỉ xử lý text; đọc/ghi file, chèn Traefik và thao tác cài đặt do bộ cài
+điều phối. Engine được import cả khi debug; với `use_template=false`, factory
+không nạp engine và giữ nguyên nội dung đầu vào.
 
 ## Module và hook
 
-`install.py` chỉ là entrypoint. Package `installer` chia theo nhiệm vụ: `config`, `environment`, `context`, `templates`, `filesystem`, `quadlet`, `systemd`, `traefik`, `adguard`, `hooks`, `commands`; `cli` điều phối pipeline.
+`install.py` chỉ là entrypoint. Package `installer` chia theo nhiệm vụ: `config`, `environment`, `context`, `templates`, `tpl_engines`, `filesystem`, `quadlet`, `systemd`, `traefik`, `adguard`, `hooks`, `commands`; `cli` điều phối pipeline.
 
 Mỗi hook là callable nhận đúng một `InstallContext`. Có thể cấu hình nhiều module/callable cho mỗi giai đoạn; chạy theo thứ tự khai báo. Hook có thể import helper chung từ `installer` hoặc helper riêng từ gốc service.
 
@@ -168,7 +240,7 @@ Từ folder bộ cài:
 python3 -m unittest discover -s tests -v
 ```
 
-Test dùng thư mục tạm, mock subprocess/HTTP và filesystem simulation; không chạy Podman, systemd, sudo hay AdGuard thật. Có kiểm thử CLI debug với cả hai service mẫu, xác nhận hook không được import và không xuất template phụ ra ngoài folder debug. Việc test qua trên Windows không xác nhận hành vi runtime của Fedora/Podman đã triển khai.
+Test dùng thư mục tạm, mock subprocess/HTTP và filesystem simulation; không chạy Podman, systemd, sudo hay AdGuard thật. Có kiểm thử CLI debug với các service mẫu, engine legacy và plugin class nạp động; xác nhận hook không được import và không xuất template phụ ra ngoài folder debug. Trên Linux, regression của template Bash được chạy bằng Bash/awk với API giả khi template gốc có trong checkout. Việc test qua trên Windows không xác nhận hành vi runtime của Fedora/Podman đã triển khai.
 
 Đã kiểm chứng thêm service `share` (PsiTransfer) chạy rootless thật trên instance
 WSL 2 Fedora 44 riêng, với cấu hình giả và không dùng Traefik: HTTP từ Windows/WSL,
