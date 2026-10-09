@@ -1,0 +1,6 @@
+file_type = "quadlets"
+systemd_units = ["stack.service", "stack-worker.service"]
+
+[variables]
+HOST_IPV4 = "192.0.2.10"
+HOST_ULA_IPV6 = "fd00::10"

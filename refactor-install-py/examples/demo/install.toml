@@ -1,0 +1,24 @@
+# Chỉ cấu hình riêng của service, không chứa bản sao bộ cài.
+rootless = true
+use_template = true
+file_type = "container"
+use_traefik_labels = true
+enable_public_domain = false
+mount_dirs = ["data", "logs"]
+config_dirs = ["config"]
+extra_template_files = ["config/app.conf.template", "demo.env.template"]
+container_uid = 1000
+container_gid = 1000
+
+[variables]
+IMAGE = "docker.io/library/nginx:alpine"
+PRIVATE_DOMAIN = "hs.lan"
+PUBLIC_DOMAIN = "example.test"
+# Địa chỉ ví dụ để debug hoạt động ngay cả trên Windows.
+HOST_IPV4 = "192.0.2.10"
+HOST_ULA_IPV6 = "fd00::10"
+APP_MESSAGE = "Ví dụ $literal được chèn nguyên văn"
+
+[hooks]
+pre_install = ["hooks/pre_install.py:run"]
+post_install = ["hooks/post_install.py:run"]

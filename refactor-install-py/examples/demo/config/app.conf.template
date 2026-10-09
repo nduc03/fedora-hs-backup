@@ -1,0 +1,5 @@
+# Cấu hình phụ giữ nguyên đường dẫn tương đối khi render.
+server_name=${SERVICE_NAME}.${PRIVATE_DOMAIN}
+host_ipv4=$HOST_IPV4
+host_ipv6=$HOST_ULA_IPV6
+message=${APP_MESSAGE}

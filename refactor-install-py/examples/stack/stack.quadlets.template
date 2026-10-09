@@ -1,0 +1,25 @@
+# FileName=stack
+[Container]
+Image=docker.io/library/nginx:alpine
+Network=stack.network
+Volume=stack.volume:/usr/share/nginx/html
+[Service]
+Restart=always
+[Install]
+WantedBy=default.target
+---
+# FileName=stack-worker
+[Container]
+Image=docker.io/library/busybox:latest
+Exec=sleep infinity
+Network=stack.network
+[Service]
+Restart=always
+[Install]
+WantedBy=default.target
+---
+# FileName=stack
+[Network]
+---
+# FileName=stack
+[Volume]
