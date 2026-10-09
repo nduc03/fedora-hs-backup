@@ -1,12 +1,4 @@
 tls:
-  certificates:
-    - certFile: /mycerts/wildcard.hs.lan/hs-end-entity-ecdsa.pem.crt
-      keyFile:  /mycerts/wildcard.hs.lan/hs-end-entity-ecdsa.pem.key
-    - certFile: /mycerts/dns.lan/hs-end-entity-ecdsa.pem.crt
-      keyFile:  /mycerts/dns.lan/hs-end-entity-ecdsa.pem.key
-    - certFile: /mycerts/ont.lan/hs-end-entity-ecdsa.pem.crt
-      keyFile:  /mycerts/ont.lan/hs-end-entity-ecdsa.pem.key
-
   options:
       dot-options:
         alpnProtocols:
@@ -19,42 +11,20 @@ http:
   # system or external services
   routers:
     ont:
-      rule: "Host(`ont.lan`)"
+      rule: "Host(`ont.$PUBLIC_DOMAIN`)"
       service: ont
       entryPoints:
         - websecure
-      tls: {}
+      tls:
+        certResolver: leresolver
 
     filebrowser:
-      rule: "Host(`file.$PRIVATE_DOMAIN`)"
+      rule: "Host(`file.$PUBLIC_DOMAIN`)"
       service: filebrowser
       entryPoints:
         - websecure
-      tls: {}
-
-    cockpit:
-      rule: "Host(`cockpit.$PRIVATE_DOMAIN`)"
-      service: cockpit
-      entryPoints:
-        - websecure
-      tls: {}
-
-    # containerized services
-    forgejo:
-      rule: "Host(`forgejo.$PRIVATE_DOMAIN`)"
-      service: forgejo
-      entryPoints:
-        - websecure
-      tls: {}
-      priority: 1
-
-    ha:
-      rule: "Host(`ha.$PRIVATE_DOMAIN`)"
-      service: ha
-      entryPoints:
-        - websecure
-      tls: {}
-      priority: 1
+      tls:
+        certResolver: leresolver
 
     dns-le:
       rule: "Host(`dns.$PUBLIC_DOMAIN`)"
@@ -81,16 +51,6 @@ http:
         serversTransport: skip-tls
         servers:
           - url: "https://host.containers.internal:9090/"
-
-    forgejo:
-      loadBalancer:
-        servers:
-          - url: "http://host.containers.internal:3000/"
-
-    ha:
-      loadBalancer:
-        servers:
-          - url: "http://host.containers.internal:8123/"
 
     dns-le:
       loadBalancer:

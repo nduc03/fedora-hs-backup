@@ -30,6 +30,7 @@ USE_TRAEFIK_LABELS=false
 #* Note: This does NOT necessarily expose your service to the internet. It simply provides a valid SSL cert
 #* so you don't have to manually install root certificates on every device across your LAN.
 #* Note: Also requires USE_TRAEFIK_LABELS set to true, and PUBLIC_DOMAIN variable defined in ~/hs-info.env or ctv.env.
+#* Khi ENABLE_PUBLIC_DOMAIN=true, tự tạo DNS rewrites IPv4 và ULA IPv6 trong AdGuard Home.
 ENABLE_PUBLIC_DOMAIN=false
 
 #* If your service has mount points, you can specify the directory names here
@@ -301,6 +302,66 @@ make_config_dir() {
     done
 }
 
+register_adguard_rewrites() (
+    # Nạp env trong subshell để không thay đổi các biến của luồng cài đặt.
+    if [[ -f "$HOME/hs-info.env" ]]; then
+        source "$HOME/hs-info.env"
+    fi
+    while IFS= read -r env_file; do
+        source "$env_file"
+    done < <(find "$SCRIPT_DIR" -name "ctv.env")
+
+    if [[ -z "${PUBLIC_DOMAIN:-}" || -z "${ADGUARD_USERNAME:-}" || -z "${ADGUARD_PASSWORD:-}" ]]; then
+        echo "[ERROR] DNS rewrite requires PUBLIC_DOMAIN, ADGUARD_USERNAME and ADGUARD_PASSWORD."
+        return 1
+    fi
+    if ! command -v curl > /dev/null || ! command -v jq > /dev/null; then
+        echo "[ERROR] DNS rewrite requires curl and jq."
+        return 1
+    fi
+
+    local API_BASE="https://dns.$PUBLIC_DOMAIN/control"
+    local DOMAIN="$SERVICE_NAME.$PUBLIC_DOMAIN"
+    local REWRITES PAYLOAD ANSWER
+    local CURL_ARGS=(--fail --silent --show-error --connect-timeout 10 --max-time 30
+        --user "$ADGUARD_USERNAME:$ADGUARD_PASSWORD")
+    local ANSWERS=("$HOST_IPV4")
+
+    # ::1 chỉ là fallback của installer, không phải địa chỉ ULA để đăng ký DNS.
+    if [[ "$HOST_ULA_IPV6" == [fF][cCdD]*:* ]]; then
+        ANSWERS+=("$HOST_ULA_IPV6")
+    else
+        echo ">>> [WARNING] No ULA IPv6 detected. Skipping IPv6 DNS rewrite."
+    fi
+
+    echo ">>> Registering AdGuard Home DNS rewrites for: $DOMAIN"
+    if ! REWRITES=$(curl "${CURL_ARGS[@]}" "$API_BASE/rewrite/list"); then
+        echo "[ERROR] Could not retrieve AdGuard Home DNS rewrites."
+        return 1
+    fi
+    if ! printf '%s' "$REWRITES" | jq -e 'type == "array"' > /dev/null; then
+        echo "[ERROR] Invalid AdGuard Home DNS rewrite response."
+        return 1
+    fi
+
+    for ANSWER in "${ANSWERS[@]}"; do
+        if printf '%s' "$REWRITES" | jq -e --arg domain "$DOMAIN" --arg answer "$ANSWER" \
+            'any(.[]; .domain == $domain and .answer == $answer)' > /dev/null; then
+            echo "    -> DNS rewrite already exists: $DOMAIN -> $ANSWER"
+            continue
+        fi
+
+        PAYLOAD=$(jq -n --arg domain "$DOMAIN" --arg answer "$ANSWER" \
+            '{domain: $domain, answer: $answer}')
+        if ! curl "${CURL_ARGS[@]}" --request POST --header 'Content-Type: application/json' \
+            --data "$PAYLOAD" "$API_BASE/rewrite/add" > /dev/null; then
+            echo "[ERROR] Could not add DNS rewrite: $DOMAIN -> $ANSWER"
+            return 1
+        fi
+        echo "    -> Added DNS rewrite: $DOMAIN -> $ANSWER"
+    done
+)
+
 echo ">>> Validating execution environment..."
 
 if [[ "$EUID" -eq 0 ]]; then
@@ -555,3 +616,9 @@ echo ">>> Done!"
 echo
 echo "To check status:"
 echo "  $SYSTEMCTL_CMD status $SERVICE_NAME"
+
+if [[ "$ENABLE_PUBLIC_DOMAIN" == "true" ]]; then
+  echo ">>> Now automatically registering DNS rewrites in AdGuard Home"
+  register_adguard_rewrites
+  echo ">>> DNS rewrites registration completed."
+fi
