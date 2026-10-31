@@ -1,0 +1,30 @@
+# FileName=hbbs
+[Container]
+AutoUpdate=registry
+Image=rustdesk/rustdesk-server:latest
+Exec=hbbs -k _
+Volume=$SERVICE_DATA_DIR/data:/root:z
+PublishPort=21115:21115/tcp
+PublishPort=21116:21116/tcp
+PublishPort=21116:21116/udp
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
+
+---
+# FileName=hbbr
+[Container]
+AutoUpdate=registry
+Image=rustdesk/rustdesk-server:latest
+Exec=hbbr -k _
+Volume=$SERVICE_DATA_DIR/data:/root:z
+PublishPort=21117:21117/tcp
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

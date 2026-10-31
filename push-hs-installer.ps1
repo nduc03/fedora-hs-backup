@@ -1,0 +1,1 @@
+git push hs-installer-repo installer:main
