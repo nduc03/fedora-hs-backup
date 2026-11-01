@@ -1,1 +1,2 @@
 file_type="quadlets"
+mount_dirs=["data"]

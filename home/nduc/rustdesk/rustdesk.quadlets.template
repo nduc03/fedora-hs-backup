@@ -1,7 +1,7 @@
 # FileName=hbbs
 [Container]
 AutoUpdate=registry
-Image=rustdesk/rustdesk-server:latest
+Image=docker.io/rustdesk/rustdesk-server:latest
 Exec=hbbs -k _
 Volume=$SERVICE_DATA_DIR/data:/root:z
 PublishPort=21115:21115/tcp
@@ -18,7 +18,7 @@ WantedBy=default.target
 # FileName=hbbr
 [Container]
 AutoUpdate=registry
-Image=rustdesk/rustdesk-server:latest
+Image=docker.io/rustdesk/rustdesk-server:latest
 Exec=hbbr -k _
 Volume=$SERVICE_DATA_DIR/data:/root:z
 PublishPort=21117:21117/tcp
