@@ -54,12 +54,12 @@ class EngineFactoryTests(ServiceTest):
     def test_default_aliases_and_explicit_class(self):
         self.assertIsInstance(load_engine("shell"), ShellEngine)
         self.assertIsInstance(load_engine("legacy"), LegacyEngine)
-        self.assertIsInstance(load_engine("installer.engines.legacy:LegacyEngine"), LegacyEngine)
+        self.assertIsInstance(load_engine("installer.tpl_engines.legacy:LegacyEngine"), LegacyEngine)
         (self.service / "install.toml").write_text("")
         self.assertEqual(load_config(self.service).template_engine, "shell")
 
     def test_toml_accepts_module_class_and_rejects_invalid_selectors(self):
-        for selector in ("legacy", "installer.engines.legacy:LegacyEngine", "my_engines.jinja:JinjaEngine"):
+        for selector in ("legacy", "installer.tpl_engines.legacy:LegacyEngine", "my_engines.jinja:JinjaEngine"):
             (self.service / "install.toml").write_text(f'template_engine="{selector}"')
             self.assertEqual(load_config(self.service).template_engine, selector)
         for value in ('""', '"unknown"', '"../engine.py:Engine"', 'false', '5', '[]'):
@@ -88,7 +88,7 @@ class Stops:
     def test_external_class_is_loaded_once_and_shared_by_main_and_extras(self):
         directory, name = self.plugin(r'''
 import re
-from installer.engines import RenderResult
+from installer.tpl_engines import RenderResult
 class AngleEngine:
     created = 0
     rendered = 0

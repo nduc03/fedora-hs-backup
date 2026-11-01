@@ -59,7 +59,20 @@ class InstallContext:
 
     @property
     def systemd_units(self) -> tuple[str, ...]:
-        return self.config.systemd_units or (f"{self.service_name}.service",)
+        if self.config.systemd_units:
+            return self.config.systemd_units
+        if self.config.file_type == "quadlets":
+            from .quadlet import extract_bundle_units
+            filename = f"{self.service_name}.quadlets"
+            relative = filename + (".template" if self.config.use_template else "")
+            source = within(self.service_dir, relative)
+            if not source.is_file():
+                source = within(self.service_dir, filename)
+            if source.is_file():
+                units = extract_bundle_units(source.read_text(encoding="utf-8-sig"))
+                if units:
+                    return units
+        return (f"{self.service_name}.service",)
 
 
 def build_context(config: ServiceConfig, service_dir: Path, service_name: str,

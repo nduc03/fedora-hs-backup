@@ -8,8 +8,8 @@ from ..common import InstallError
 from .base import RenderResult, TemplateEngine
 
 BUILTIN_ENGINES = {
-    "shell": "installer.engines.shell:ShellEngine",
-    "legacy": "installer.engines.legacy:LegacyEngine",
+    "shell": "installer.tpl_engines.shell:ShellEngine",
+    "legacy": "installer.tpl_engines.legacy:LegacyEngine",
 }
 ENGINE_TARGET = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*:[A-Za-z_][A-Za-z0-9_]*")
 

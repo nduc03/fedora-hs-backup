@@ -72,8 +72,6 @@ def load_config(service_dir: Path) -> ServiceConfig:
                 within(service_dir, value)
                 if key == "extra_template_files" and not value.endswith(".template"):
                     raise InstallError(f"Template phụ phải có đuôi .template: {value!r}")
-    if raw.get("file_type") == "quadlets" and not raw["systemd_units"]:
-        raise InstallError("file_type='quadlets' cần khai báo systemd_units rõ ràng.")
     for key in ("container_uid", "container_gid"):
         value = raw.get(key, 1000)
         if type(value) is not int or value < 0:

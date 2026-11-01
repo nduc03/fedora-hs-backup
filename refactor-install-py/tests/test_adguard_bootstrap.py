@@ -1,4 +1,5 @@
 import io
+import json
 import subprocess
 import sys
 import unittest
@@ -81,12 +82,13 @@ class BootstrapPipelineTests(ServiceTest):
         request.assert_not_called()
 
     def test_regular_image_still_registers_dns(self):
+        status_ok = json.dumps({"version": "v0.107.0", "protection_enabled": True, "running": True}).encode()
         context = self.context(enable_public_domain=True, variables={
             "IMAGE": "nginx", "ADGUARD_USERNAME": "example", "ADGUARD_PASSWORD": "example-only"})
         with patch("installer.adguard.urllib.request.urlopen",
-                   side_effect=[io.BytesIO(b"[]"), io.BytesIO(b""), io.BytesIO(b"")]) as request:
+                   side_effect=[io.BytesIO(status_ok), io.BytesIO(b"[]"), io.BytesIO(b""), io.BytesIO(b"")]) as request:
             run_pipeline(context, debug=False, allow_unresolved=False)
-        self.assertEqual(request.call_count, 3)
+        self.assertEqual(request.call_count, 4)
 
 
 @unittest.skipUnless(sys.platform.startswith("linux"), "Bash regression checks run on Linux")

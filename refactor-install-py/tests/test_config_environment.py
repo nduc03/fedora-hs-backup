@@ -40,10 +40,15 @@ class ConfigTests(ServiceTest):
                    'unknown_option=true', 'service_data_dir=5',
                    '[variables]\nBAD=[]', '[hooks]\npre_install="hooks/a.py:run"',
                    '[hooks]\nprepare=[]', '[hooks]\npre_install=["../bad.py:run"]',
-                   '[hooks]\npre_install=["hooks/a.sh:run"]', 'file_type="quadlets"']
+                   '[hooks]\npre_install=["hooks/a.sh:run"]']
         for text in invalid:
             with self.subTest(text=text), self.assertRaises(InstallError):
                 self.config_text(text)
+
+    def test_quadlets_without_systemd_units_is_valid(self):
+        config = self.config_text('file_type="quadlets"')
+        self.assertEqual(config.file_type, "quadlets")
+        self.assertEqual(config.systemd_units, ())
 
     def test_missing_config_does_not_run_shell(self):
         (self.service / "install.toml").unlink()

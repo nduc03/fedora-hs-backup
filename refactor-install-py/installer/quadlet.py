@@ -20,6 +20,20 @@ RESOURCE_SECTION = re.compile(r"(?m)^\s*\[(Container|Network|Volume|Pod|Image|Bu
 class Member:
     filename: str
     text: str
+    resource_type: str = "Container"
+
+    @property
+    def stem(self) -> str:
+        return self.filename.rsplit(".", 1)[0]
+
+    @property
+    def systemd_unit(self) -> str | None:
+        """Trả về tên systemd unit tương ứng nếu loại tài nguyên này sinh ra service unit."""
+        if self.resource_type == "Container":
+            return f"{self.stem}.service"
+        if self.resource_type == "Pod":
+            return f"{self.stem}-pod.service"
+        return None
 
 
 def parse_bundle(text: str) -> list[Member]:
@@ -34,12 +48,23 @@ def parse_bundle(text: str) -> list[Member]:
         name = names[0]
         if not re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9_.-]*", name) or ".." in name:
             raise InstallError(f"FileName trong bundle không hợp lệ: {name!r}")
-        extension = RESOURCE_TYPES[types[0]]
+        res_type = types[0]
+        extension = RESOURCE_TYPES[res_type]
         # Podman always appends the resource extension to FileName, then trims the block.
-        members.append(Member(f"{name}.{extension}", block.strip()))
+        members.append(Member(f"{name}.{extension}", block.strip(), resource_type=res_type))
     if not members or len({member.filename for member in members}) != len(members):
         raise InstallError("Bundle rỗng hoặc có FileName trùng lặp.")
     return members
+
+
+def extract_bundle_units(text: str) -> tuple[str, ...]:
+    """Tìm tất cả systemd units do bundle sinh ra (từ Container, Pod...)."""
+    units = []
+    for member in parse_bundle(text):
+        unit = member.systemd_unit
+        if unit and unit not in units:
+            units.append(unit)
+    return tuple(units)
 
 
 @dataclass(frozen=True)

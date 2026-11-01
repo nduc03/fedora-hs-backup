@@ -6,7 +6,7 @@ import urllib.error
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from installer.adguard import register_rewrites
+from installer.adguard import register_rewrites, validate_settings
 from installer.commands import CommandRunner
 from installer.common import InstallError
 from installer.filesystem import namespace_ownership, prepare_directories
@@ -306,3 +306,33 @@ class AdGuardTests(ServiceTest):
         with patch("installer.adguard.urllib.request.urlopen") as request, self.assertRaises(InstallError):
             register_rewrites(self.context(enable_public_domain=True))
         request.assert_not_called()
+
+    def test_validate_settings_warns_and_verifies_adguard_status(self):
+        status_ok = json.dumps({"version": "v0.107.43", "protection_enabled": True, "running": True, "dns_port": 53}).encode()
+        logs = []
+        ctx = self.dns_context()
+        ctx.log = logs.append
+        with patch("installer.adguard.urllib.request.urlopen", return_value=io.BytesIO(status_ok)) as request:
+            base = validate_settings(ctx)
+        self.assertEqual(base, "https://dns.example.test/control")
+        self.assertTrue(any("[WARN]" in line and "AGH_BASE_URL" in line for line in logs))
+        self.assertEqual(request.call_count, 1)
+        req = request.call_args.args[0]
+        self.assertEqual(req.full_url, "https://dns.example.test/control/status")
+        self.assertEqual(req.get_method(), "GET")
+
+    def test_validate_settings_custom_base_url_normalized(self):
+        status_ok = json.dumps({"version": "v0.107.43", "protection_enabled": True, "running": True}).encode()
+        logs = []
+        ctx = self.dns_context(AGH_BASE_URL="https://custom-agh.local:3000")
+        ctx.log = logs.append
+        with patch("installer.adguard.urllib.request.urlopen", return_value=io.BytesIO(status_ok)) as request:
+            base = validate_settings(ctx)
+        self.assertEqual(base, "https://custom-agh.local:3000/control")
+        self.assertFalse(any("[WARN]" in line for line in logs))
+        self.assertEqual(request.call_args.args[0].full_url, "https://custom-agh.local:3000/control/status")
+
+    def test_validate_settings_fails_when_not_adguard_home(self):
+        for bad_content in (b"<html>404 Not Found</html>", b"{}", json.dumps({"status": "ok"}).encode()):
+            with self.subTest(bad_content=bad_content), patch("installer.adguard.urllib.request.urlopen", return_value=io.BytesIO(bad_content)), self.assertRaises(InstallError):
+                validate_settings(self.dns_context())

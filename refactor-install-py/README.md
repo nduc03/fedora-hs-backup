@@ -82,7 +82,7 @@ pre_install = ["hooks/pre_install.py:run"]
 post_install = ["hooks/post_install.py:run"]
 ```
 
-Mặc định: rootless/template bật; `template_engine="shell"`; `file_type="container"`; Traefik/public domain tắt; các danh sách rỗng; container UID/GID `1000:1000`; dữ liệu tại `~/container-data/<service_name>`; unit `<service_name>.service`. `service_data_dir` nhận đường dẫn tuyệt đối, `~/...`, hoặc tương đối bên trong service. UID/GID tài khoản host lấy từ hệ thống, không mặc định là 1000. Quadlet rootless cài tại `~/.config/containers/systemd`, hoặc `$XDG_CONFIG_HOME/containers/systemd` nếu environment của tiến trình đặt gốc XDG tuyệt đối; rootful tại `/etc/containers/systemd`.
+Mặc định: rootless/template bật; `template_engine="shell"`; `file_type="container"`; Traefik/public domain tắt; các danh sách rỗng; container UID/GID `1000:1000`; dữ liệu tại `~/container-data/<service_name>`. `systemd_units` là tùy chọn (optional): mặc định là `<service_name>.service` (với `file_type="container"`) hoặc tự động trích xuất từ các block sinh service trong bundle (với `file_type="quadlets"`). `service_data_dir` nhận đường dẫn tuyệt đối, `~/...`, hoặc tương đối bên trong service. UID/GID tài khoản host lấy từ hệ thống, không mặc định là 1000. Quadlet rootless cài tại `~/.config/containers/systemd`, hoặc `$XDG_CONFIG_HOME/containers/systemd` nếu environment của tiến trình đặt gốc XDG tuyệt đối; rootful tại `/etc/containers/systemd`.
 
 Các đường dẫn mount/config/template/hook phải tương đối và không chứa `..` hay thoát khỏi gốc qua symlink. Tùy chọn không được hỗ trợ, sai kiểu, template/hook cần dùng bị thiếu hoặc bundle không hợp lệ đều làm dừng cài đặt. Nguồn `config_dirs` chưa tồn tại thì cảnh báo và bỏ qua copy, giống template Bash.
 
@@ -101,7 +101,9 @@ Thứ tự ghi đè:
 `.env` là dữ liệu literal: hỗ trợ `KEY=value`, `export KEY=value`, dòng comment và giá trị có dấu nháy đơn/kép. Bỏ dấu nháy bao ngoài nhưng giữ nguyên nội dung, kể cả `$VAR`, `${VAR}`, backslash, backtick và `$(command)`. Comment cuối giá trị không có nháy cần được ngăn bằng khoảng trắng; `#` bên trong giá trị có nháy hoặc `x#fragment` là dữ liệu. Không hỗ trợ multiline hoặc diễn giải escape như Bash. Dòng không phải phép gán báo lỗi kèm file/dòng, không in giá trị.
 
 ```dotenv
-PUBLIC_DOMAIN=example.test
+PUBLIC_DOMAIN=example.test # base url cho api sẽ thành https://dns.example.test/control
+# có thể sử dụng AGH_BASE_URL thay cho PUBLIC_DOMAIN
+AGH_BASE_URL=https://agh.example.com/control # ưu tiên cao hơn PUBLIC_DOMAIN
 ADGUARD_USERNAME=admin
 ADGUARD_PASSWORD='mat-khau-co-$-va-#'
 ```
@@ -140,7 +142,7 @@ Không cần chuyển cú pháp placeholder để dùng engine này.
 
 Factory dùng `importlib` để tạo class từ selector `package.module:EngineClass`.
 Hai alias `shell` và `legacy` tương ứng với
-`installer.tpl_tpl_engines.shell:ShellEngine` và `installer.tpl_engines.legacy:LegacyEngine`.
+`installer.tpl_engines.shell:ShellEngine` và `installer.tpl_engines.legacy:LegacyEngine`.
 Ví dụ chọn class trực tiếp:
 
 ```toml
@@ -210,14 +212,14 @@ Pipeline cài thật: kiểm tra Linux/user/config → nạp biến/render/kiể
 
 `config_dirs` được copy đè vào dữ liệu bằng cách merge, không xóa các file cũ không có trong nguồn. Giữ cách cấp mode của Bash: thư mục 755, file 644. Chế độ rootless đưa quyền config về tài khoản host để copy, rồi chuyển sang UID/GID trong namespace Podman; mount có ownership đúng thì bỏ qua `chown`. Rootful dùng quyền cao cho thao tác filesystem và không gọi `podman unshare`.
 
-Quadlet chính là `<service_name>.container[.template]` hoặc `.quadlets[.template]`. File `<service_name>.network` và `.volume` phụ được cài nếu có; nếu render chúng từ template phụ, dùng bản staged. Bundle cần khai báo `systemd_units` và mỗi phần có `# FileName=<stem>` cùng một section tài nguyên, ngăn bằng dòng `---`. Podman tự thêm đuôi loại tài nguyên vào stem; không thêm `.container` vào `FileName`.
+Quadlet chính là `<service_name>.container[.template]` hoặc `.quadlets[.template]`. File `<service_name>.network` và `.volume` phụ được cài nếu có; nếu render chúng từ template phụ, dùng bản staged. Bundle nhận diện từng phần qua `# FileName=<stem>` cùng một section tài nguyên, ngăn bằng dòng `---`. Podman tự thêm đuôi loại tài nguyên vào stem; không thêm `.container` vào `FileName`. Khai báo `systemd_units` là tùy chọn (optional); nếu không khai báo, bộ cài tự động quét các section sinh service (`[Container]` tạo `<stem>.service`, `[Pod]` tạo `<stem>-pod.service`) và bỏ qua các tài nguyên phụ như Network, Volume.
 
 ```toml
 file_type = "quadlets"
-systemd_units = ["stack.service", "stack-worker.service"]
+# systemd_units = ["stack.service", "stack-worker.service"]  # tùy chọn; mặc định tự trích xuất từ FileName
 ```
 
-Ví dụ hoàn chỉnh nằm trong `examples/stack/`. Parser nhận Container, Network, Volume, Pod, Image, Build, Kube và Artifact; Podman trên host vẫn phải hỗ trợ loại tài nguyên đó. Unit cần quản lý là unit khai báo trong TOML; bộ cài không đoán tên các unit sinh từ Pod/Kube/`ServiceName=`.
+Ví dụ hoàn chỉnh nằm trong `examples/stack/`. Parser nhận Container, Network, Volume, Pod, Image, Build, Kube và Artifact; Podman trên host vẫn phải hỗ trợ loại tài nguyên đó. Nếu cần quản lý unit có `ServiceName=` tùy biến hoặc chỉ định tập con service cụ thể, hãy khai báo `systemd_units` trong TOML.
 
 Chỉ snapshot/xóa/thay definition thuộc các nguồn cài của lần chạy này. Bỏ qua nguồn có nội dung giống snapshot để giữ nguyên metadata và tránh cảnh báo `NeedDaemonReload`. Với nguồn thay đổi, giữ workaround xóa definition cũ trước `podman quadlet install --replace`, nhưng luôn có backup; truyền `--reload-systemd=false` để tự quyết định reload. Nội dung thay đổi thì daemon-reload một lần và restart các unit đã chọn. Không đổi thì chỉ start unit đang dừng, không reload/restart. Không tự xóa member cũ đã bỏ khỏi bundle; hãy xử lý việc gỡ unit riêng khi chuyển đổi service.
 
@@ -225,7 +227,7 @@ Lỗi trong bước cài Quadlet khôi phục nội dung/mode các definition c�
 
 Traefik tự chèn network và label LAN ngay dưới `[Container]`, dùng `PRIVATE_DOMAIN` hoặc fallback `hs.lan`. Bật `enable_public_domain` thêm router public với `leresolver`. Trong bundle, label tự động chỉ áp dụng cho container chính có `FileName=<service_name>`; container khác tự định nghĩa routing để không trùng router.
 
-`enable_public_domain` cũng bật đăng ký AdGuard, cần `PUBLIC_DOMAIN`, `ADGUARD_USERNAME`, `ADGUARD_PASSWORD`. API dùng HTTPS `https://dns.<PUBLIC_DOMAIN>/control`, Basic Auth và timeout 30 giây; giữ xác minh TLS mặc định. Đọc `/rewrite/list`, chỉ POST `/rewrite/add` cho cặp domain/địa chỉ chưa có, bao gồm IPv4 và ULA thực sự; không dùng `::1`, link-local hoặc IPv6 global làm rewrite ULA. Credentials chỉ gửi trong header, không ghi vào log lỗi HTTP.
+`enable_public_domain` cũng bật đăng ký AdGuard, cần `ADGUARD_USERNAME`, `ADGUARD_PASSWORD` và ít nhất một trong hai: `PUBLIC_DOMAIN` hoặc `AGH_BASE_URL`. URL API AdGuard Home ưu tiên `AGH_BASE_URL` (nếu khai báo), fallback về HTTPS `https://dns.<PUBLIC_DOMAIN>/control`, sử dụng Basic Auth và timeout 30 giây; giữ xác minh TLS mặc định. Đọc `/rewrite/list`, chỉ POST `/rewrite/add` cho cặp domain/địa chỉ chưa có, bao gồm IPv4 và ULA thực sự; không dùng `::1`, link-local hoặc IPv6 global làm rewrite ULA. Credentials chỉ gửi trong header, không ghi vào log lỗi HTTP.
 
 Nếu image container sau render là `adguard/adguardhome` (có thể có registry,
 tag hoặc digest), bộ cài bỏ qua kiểm tra credential và mọi API DNS để bootstrap

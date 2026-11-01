@@ -11,7 +11,6 @@ from .common import InstallError
 from .context import InstallContext
 from .traefik import domain_value
 
-
 def is_bootstrap_service(quadlet: str) -> bool:
     """Recognize AdGuard Home by the rendered container image, including bundles."""
     in_container = False
@@ -28,38 +27,83 @@ def is_bootstrap_service(quadlet: str) -> bool:
     return False
 
 
-def validate_settings(context: InstallContext) -> None:
+def resolve_base_url(context: InstallContext) -> str:
+    variables = context.variables
+    base_override = variables.get("AGH_BASE_URL")
+    if base_override:
+        base = base_override.rstrip("/")
+        if not base.endswith("/control"):
+            base += "/control"
+        return base
+    base = f"https://dns.{variables['PUBLIC_DOMAIN']}/control"
+    context.log(f"[WARN] Do không có cấu hình AGH_BASE_URL, URL sẽ được dùng để gọi API là {base}")
+    return base
+
+
+def get_authorization(variables: dict[str, str]) -> str:
+    credentials = f"{variables['ADGUARD_USERNAME']}:{variables['ADGUARD_PASSWORD']}"
+    return "Basic " + base64.b64encode(credentials.encode("utf-8")).decode("ascii")
+
+
+def make_request(base: str, authorization: str, endpoint: str, payload: dict[str, str] | None = None) -> bytes:
+    headers = {"Authorization": authorization}
+    body = None
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+        body = json.dumps(payload).encode("utf-8")
+    message = urllib.request.Request(base + endpoint, data=body, headers=headers,
+                                     method="POST" if payload is not None else "GET")
+    try:
+        with urllib.request.urlopen(message, timeout=30) as response:
+            return response.read()
+    except urllib.error.HTTPError as error:
+        error.close()
+        if error.code in (401, 403):
+            raise InstallError(f"AdGuard {endpoint}: HTTP {error.code} (xác thực thất bại, kiểm tra username/password).") from error
+        raise InstallError(f"AdGuard {endpoint}: HTTP {error.code}.") from error
+    except (urllib.error.URLError, OSError) as error:
+        # Do not report headers, response bodies or credentials.
+        raise InstallError(f"Không kết nối được AdGuard tại {base}.") from error
+
+
+def check_adguard_status(base: str, authorization: str) -> dict[str, object]:
+    content = make_request(base, authorization, "/status")
+    try:
+        data = json.loads(content)
+    except (ValueError, UnicodeError) as error:
+        raise InstallError(f"Phản hồi từ {base}/status không phải JSON hợp lệ.") from error
+    if not isinstance(data, dict):
+        raise InstallError(f"Phản hồi từ {base}/status không đúng định dạng AdGuard Home.")
+    required_keys = ("version", "protection_enabled", "running")
+    if not all(k in data for k in required_keys):
+        raise InstallError(f"Phản hồi từ {base}/status không đúng định dạng AdGuard Home (thiếu trường cấu trúc ServerStatus).")
+    return data
+
+
+def validate_settings(context: InstallContext, *, test_connection: bool = True) -> str:
+    variables = context.variables
     for name in ("PUBLIC_DOMAIN", "ADGUARD_USERNAME", "ADGUARD_PASSWORD"):
-        if not context.variables.get(name):
+        if not variables.get(name):
             raise InstallError(f"DNS AdGuard cần biến {name}.")
-    domain_value(context.variables["PUBLIC_DOMAIN"])
+    domain_value(variables["PUBLIC_DOMAIN"])
+
+    base = resolve_base_url(context)
+    if test_connection:
+        authorization = get_authorization(variables)
+        data = check_adguard_status(base, authorization)
+        version = data.get("version", "unknown")
+        context.log(f">>> Đã kết nối AdGuard Home ({version}) tại {base}.")
+    return base
 
 
 def register_rewrites(context: InstallContext) -> None:
-    validate_settings(context)
+    base = validate_settings(context, test_connection=False)
     variables = context.variables
-    base = f"https://dns.{variables['PUBLIC_DOMAIN']}/control"
     domain = f"{context.service_name}.{variables['PUBLIC_DOMAIN']}"
-    credentials = f"{variables['ADGUARD_USERNAME']}:{variables['ADGUARD_PASSWORD']}"
-    authorization = "Basic " + base64.b64encode(credentials.encode("utf-8")).decode("ascii")
+    authorization = get_authorization(variables)
 
     def request(endpoint: str, payload: dict[str, str] | None = None) -> bytes:
-        headers = {"Authorization": authorization}
-        body = None
-        if payload is not None:
-            headers["Content-Type"] = "application/json"
-            body = json.dumps(payload).encode("utf-8")
-        message = urllib.request.Request(base + endpoint, data=body, headers=headers,
-                                         method="POST" if payload is not None else "GET")
-        try:
-            with urllib.request.urlopen(message, timeout=30) as response:
-                return response.read()
-        except urllib.error.HTTPError as error:
-            error.close()
-            raise InstallError(f"AdGuard {endpoint}: HTTP {error.code}.") from error
-        except (urllib.error.URLError, OSError) as error:
-            # Do not report headers, response bodies or credentials.
-            raise InstallError(f"Không kết nối được AdGuard tại {base}.") from error
+        return make_request(base, authorization, endpoint, payload)
 
     try:
         rewrites = json.loads(request("/rewrite/list"))
