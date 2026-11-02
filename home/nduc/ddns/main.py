@@ -69,7 +69,6 @@ def update_dns_record(zone_id, dns_record_name, ip):
         'type': 'A',
         'name': dns_record_name,
         'content': ip,
-        'proxied': True,
     }
 
     try:
@@ -99,7 +98,6 @@ def update_dns6_record(zone_id, dns_record_name, ipv6):
         'type': 'AAAA',
         'name': dns_record_name,
         'content': ipv6,
-        'proxied': True,
     }
 
     try:
